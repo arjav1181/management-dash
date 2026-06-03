@@ -1,0 +1,14 @@
+{
+  "name": "Bridge — Infrastructure Control Center",
+  "short_name": "Bridge",
+  "description": "Unified control center for HF Spaces, Vercel, GitHub, Docker, GitLab, and Netlify.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0b0e",
+  "theme_color": "#6366f1",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/apple-icon.svg", "sizes": "180x180", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "categories": ["developer", "productivity", "utilities"]
+}

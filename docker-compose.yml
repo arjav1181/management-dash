@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  bridge:
+    build: .
+    ports:
+      - '3000:3000'
+      - '3001:3001'
+    environment:
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - BRIDGE_TOKEN_KEY=${BRIDGE_TOKEN_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - WSS_PROXY_ENABLED=true
+      - WSS_PROXY_PORT=3001
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3

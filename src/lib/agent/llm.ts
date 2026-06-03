@@ -286,6 +286,8 @@ function parseJsonSafe(s: string): Record<string, unknown> {
   try { return JSON.parse(s); } catch { return {}; }
 }
 
+export { parseJsonSafe };
+
 const JSON_FENCE_RE = /```(?:json)?\s*([\s\S]*?)```/g;
 
 function extractFallbackToolCalls(text: string, tools: AgentTool[]): Array<{ id: string; name: string; arguments: Record<string, unknown> }> {
@@ -302,15 +304,32 @@ function extractFallbackToolCalls(text: string, tools: AgentTool[]): Array<{ id:
     } catch { /* not JSON */ }
   }
   if (out.length === 0) {
-    const bare = text.match(/\{[\s\S]*?"name"\s*:\s*"(?:[a-z_]+)"[\s\S]*?\}/);
-    if (bare) {
+    const candidates: string[] = [];
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] !== '{') continue;
+      let depth = 0;
+      for (let j = i; j < text.length; j++) {
+        if (text[j] === '{') depth++;
+        else if (text[j] === '}') {
+          depth--;
+          if (depth === 0) {
+            candidates.push(text.slice(i, j + 1));
+            i = j;
+            break;
+          }
+        }
+      }
+    }
+    for (const c of candidates) {
       try {
-        const parsed = JSON.parse(bare[0]);
+        const parsed = JSON.parse(c);
         if (parsed?.name && names.has(parsed.name)) {
-          out.push({ id: `fb-${Date.now()}`, name: parsed.name, arguments: parsed.arguments || {} });
+          out.push({ id: `fb-${Date.now()}-${out.length}`, name: parsed.name, arguments: parsed.arguments || {} });
         }
       } catch { /* ignore */ }
     }
   }
   return out;
 }
+
+export { extractFallbackToolCalls };

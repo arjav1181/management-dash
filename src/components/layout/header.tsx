@@ -6,6 +6,8 @@ import { useSettingsStore } from '@/lib/store/settings';
 import { LogOut, User, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNotifications } from '@/hooks/use-notifications';
+import { ThemeToggle } from './theme-toggle';
+import { LocaleSwitcher } from '@/lib/i18n';
 
 const pageTitles: Record<string, string> = {
   '/': 'Overview',
@@ -56,6 +58,8 @@ export function Header() {
                 </span>
               )}
             </Link>
+            <LocaleSwitcher />
+            <ThemeToggle />
             <div className="hidden sm:flex items-center gap-2 text-sm text-text-secondary">
               <User size={16} className="text-text-muted" />
               <span>{user.email}</span>

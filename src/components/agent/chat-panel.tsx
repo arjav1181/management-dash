@@ -10,10 +10,11 @@ interface ChatPanelProps {
   messages: AgentMessage[];
   onSend: (message: string) => void;
   loading: boolean;
+  streamingText?: string;
   className?: string;
 }
 
-export function ChatPanel({ messages, onSend, loading, className }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, loading, streamingText, className }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -82,7 +83,10 @@ export function ChatPanel({ messages, onSend, loading, className }: ChatPanelPro
                     : 'bg-bg-tertiary text-text-primary border border-border-primary'
                 )}
               >
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                <p className="whitespace-pre-wrap">
+                  {msg.content}
+                  {msg.role === 'assistant' && loading && streamingText && msg === messages[messages.length - 1] ? streamingText : ''}
+                </p>
                 {msg.actions && msg.actions.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {msg.actions.map((action) => {

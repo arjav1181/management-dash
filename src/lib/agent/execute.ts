@@ -43,6 +43,15 @@ export interface AgentRunResult {
   pendingConfirmation: AgentActionResult[];
 }
 
+export interface AgentStreamEvent {
+  type: 'text' | 'action' | 'pending' | 'done' | 'error';
+  text?: string;
+  action?: AgentActionResult;
+  pending?: AgentActionResult;
+  error?: string;
+  result?: AgentRunResult;
+}
+
 const MAX_TURNS = 6;
 
 export async function runAgent({
@@ -54,6 +63,18 @@ export async function runAgent({
   signal,
   approvedTools = [],
 }: RunAgentArgs): Promise<AgentRunResult> {
+  return collectStream(runAgentStream({ userId, message, history, settings, supabase, signal, approvedTools }));
+}
+
+export async function* runAgentStream({
+  userId,
+  message,
+  history,
+  settings,
+  supabase,
+  signal,
+  approvedTools = [],
+}: RunAgentArgs): AsyncGenerator<AgentStreamEvent> {
   const llm = settings.llmConfig;
   const { AGENT_TOOLS } = await import('./tools');
 
@@ -77,8 +98,13 @@ export async function runAgent({
   let finalText = '';
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
+    if (signal?.aborted) {
+      yield { type: 'error', error: 'aborted' };
+      return;
+    }
     const response = await chatWithLLM({ llm, messages, tools, signal });
     finalText = response.text;
+    if (response.text) yield { type: 'text', text: response.text };
 
     if (!response.toolCalls.length) break;
 
@@ -106,6 +132,7 @@ export async function runAgent({
         action.summary = `Unknown tool: ${tc.name}`;
         messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ error: 'Unknown tool' }) });
         allActions.push(action);
+        yield { type: 'action', action };
         continue;
       }
 
@@ -114,6 +141,7 @@ export async function runAgent({
         action.summary = `${missing} token not configured`;
         messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ error: action.summary }) });
         allActions.push(action);
+        yield { type: 'action', action };
         continue;
       }
 
@@ -123,6 +151,8 @@ export async function runAgent({
         action.summary = `Awaiting user confirmation for ${tool.name}`;
         messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ awaiting_confirmation: true }) });
         allActions.push(action);
+        yield { type: 'pending', pending: action };
+        yield { type: 'action', action };
         continue;
       }
 
@@ -143,14 +173,22 @@ export async function runAgent({
         log.error('agent_tool_failed', { tool: tool.name, error: action.summary });
       }
       allActions.push(action);
+      yield { type: 'action', action };
       messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ ok: action.ok, summary: action.summary, data: action.data }) });
     }
 
-    if (allConfirmed && pending.length === 0) {
-      continue;
-    }
+    if (allConfirmed && pending.length === 0) continue;
     if (pending.length > 0) break;
   }
 
-  return { text: finalText, actions: allActions, pendingConfirmation: pending };
+  const result: AgentRunResult = { text: finalText, actions: allActions, pendingConfirmation: pending };
+  yield { type: 'done', result };
+}
+
+async function collectStream(gen: AsyncGenerator<AgentStreamEvent>): Promise<AgentRunResult> {
+  let result: AgentRunResult = { text: '', actions: [], pendingConfirmation: [] };
+  for await (const ev of gen) {
+    if (ev.type === 'done' && ev.result) result = ev.result;
+  }
+  return result;
 }
