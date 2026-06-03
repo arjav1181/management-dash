@@ -15,25 +15,46 @@ async function fetchApi(token: string, path: string, options?: RequestInit) {
 }
 
 export async function listSpaces(token: string): Promise<HFSpace[]> {
-  const data = await fetchApi(token, '/spaces');
-  return (data || []).map((s: Record<string, unknown>) => ({
-    id: s.id as string,
-    name: (s.id as string).split('/')[1] || (s.id as string),
-    sdk: (s.sdk as string) || 'docker',
-    status: (s.status as HFSpace['status']) || 'unknown',
-    likes: (s.likes as number) || 0,
-    private: (s.private as boolean) || false,
-    createdAt: (s.createdAt as string) || '',
-    lastModified: (s.lastModified as string) || '',
-    runtime: {
-      cpu: ((s.runtime as Record<string, string>)?.cpu) || '',
-      memory: ((s.runtime as Record<string, string>)?.memory) || '',
-      gpu: (s.runtime as Record<string, string>)?.gpu,
-    },
-    url: `https://${(s.id as string).split('/')[1] || s.id}.hf.space`,
-    wssEnabled: false,
-    sshEnabled: false,
-  }));
+  const whoami = await fetchApi(token, '/whoami-v2');
+  const name = whoami?.name as string;
+  const orgs = (whoami?.orgs as { name: string }[]) || [];
+
+  const authors = [name, ...orgs.map((o) => o.name)];
+  const results: HFSpace[] = [];
+
+  for (const author of authors) {
+    try {
+      const data = await fetchApi(token, `/spaces?author=${author}`);
+      const spaces: HFSpace[] = (data || []).map((s: Record<string, unknown>) => ({
+        id: s.id as string,
+        name: (s.id as string).split('/')[1] || (s.id as string),
+        sdk: (s.sdk as string) || 'docker',
+        status: (s.status as HFSpace['status']) || 'unknown',
+        likes: (s.likes as number) || 0,
+        private: (s.private as boolean) || false,
+        createdAt: (s.createdAt as string) || '',
+        lastModified: (s.lastModified as string) || '',
+        runtime: {
+          cpu: ((s.runtime as Record<string, string>)?.cpu) || '',
+          memory: ((s.runtime as Record<string, string>)?.memory) || '',
+          gpu: (s.runtime as Record<string, string>)?.gpu,
+        },
+        url: `https://${(s.id as string).split('/')[1] || s.id}.hf.space`,
+        wssEnabled: false,
+        sshEnabled: false,
+      }));
+      results.push(...spaces);
+    } catch {
+      // skip orgs that fail
+    }
+  }
+
+  const seen = new Set<string>();
+  return results.filter((s) => {
+    if (seen.has(s.id)) return false;
+    seen.add(s.id);
+    return true;
+  });
 }
 
 export async function getSpaceStatus(token: string, spaceId: string): Promise<HFSpace['status']> {

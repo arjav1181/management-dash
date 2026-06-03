@@ -46,10 +46,10 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg-primary p-4 overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-accent/8 via-transparent to-emerald/8 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-br from-accent/10 via-transparent to-accent-lighter/5 pointer-events-none" />
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl animate-pulseSoft" />
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-emerald/5 rounded-full blur-3xl animate-pulseSoft" style={{ animationDelay: '1s' }} />
-      <div className="absolute top-1/3 right-1/3 w-64 h-64 bg-info/5 rounded-full blur-3xl animate-pulseSoft" style={{ animationDelay: '2s' }} />
+      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-accent-lighter/5 rounded-full blur-3xl animate-pulseSoft" style={{ animationDelay: '1s' }} />
+      <div className="absolute top-1/3 right-1/3 w-64 h-64 bg-accent-subtle/5 rounded-full blur-3xl animate-pulseSoft" style={{ animationDelay: '2s' }} />
 
       <Card className="w-full max-w-sm relative animate-fadeIn shadow-xl shadow-accent/5 border-accent/10">
         <CardContent>
