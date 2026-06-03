@@ -55,28 +55,27 @@ const DEFAULT_SETTINGS: FlatSettings = {
   llmConfig: { provider: 'groq', apiKey: '', model: 'llama-3.1-8b-instant' },
 };
 
-function safeDecrypt(cipher: string | null | undefined): string {
-  if (!cipher) return '';
-  try {
-    return decryptToken(cipher);
-  } catch {
-    return isLegacyPlaintext(cipher) ? cipher : '';
-  }
+const ENC_PREFIX = 'enc:';
+
+function isEncrypted(value: string): boolean {
+  return value.startsWith(ENC_PREFIX);
 }
 
 function isLegacyPlaintext(value: string): boolean {
-  if (value.startsWith('enc:')) return false;
-  if (value.length < 32) return true;
-  try {
-    const buf = Buffer.from(value, 'base64');
-    if (buf.length < 28) return true;
-    return false;
-  } catch {
-    return true;
-  }
+  return !isEncrypted(value);
 }
 
 export { isLegacyPlaintext };
+
+function safeDecrypt(cipher: string | null | undefined): string {
+  if (!cipher) return '';
+  if (!isEncrypted(cipher)) return cipher;
+  try {
+    return decryptToken(cipher.slice(ENC_PREFIX.length));
+  } catch {
+    return '';
+  }
+}
 
 export function rowToSettings(row: Partial<UserSettingsRow> | null | undefined): FlatSettings {
   if (!row) return { ...DEFAULT_SETTINGS };
@@ -99,18 +98,19 @@ export function rowToSettings(row: Partial<UserSettingsRow> | null | undefined):
 }
 
 export function settingsToRow(settings: FlatSettings): Partial<UserSettingsRow> {
+  const wrap = (plain: string): string => (plain ? ENC_PREFIX + encryptToken(plain) : '');
   return {
-    hf_token: settings.hfToken ? encryptToken(settings.hfToken) : '',
-    vercel_token: settings.vercelToken ? encryptToken(settings.vercelToken) : '',
-    github_token: settings.githubToken ? encryptToken(settings.githubToken) : '',
-    docker_token: settings.dockerToken ? encryptToken(settings.dockerToken) : '',
-    gitlab_token: settings.gitlabToken ? encryptToken(settings.gitlabToken) : '',
+    hf_token: wrap(settings.hfToken),
+    vercel_token: wrap(settings.vercelToken),
+    github_token: wrap(settings.githubToken),
+    docker_token: wrap(settings.dockerToken),
+    gitlab_token: wrap(settings.gitlabToken),
     gitlab_url: settings.gitlabUrl,
-    netlify_token: settings.netlifyToken ? encryptToken(settings.netlifyToken) : '',
+    netlify_token: wrap(settings.netlifyToken),
     github_scope: settings.githubScope,
     llm_provider: settings.llmConfig.provider,
     llm_model: settings.llmConfig.model,
-    llm_api_key: settings.llmConfig.apiKey ? encryptToken(settings.llmConfig.apiKey) : '',
+    llm_api_key: wrap(settings.llmConfig.apiKey),
     llm_base_url: settings.llmConfig.baseUrl || '',
   };
 }

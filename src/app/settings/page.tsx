@@ -52,11 +52,13 @@ function TokenInput({ id, label, value, onChange, placeholder, show, onToggleSho
 }
 
 export default function SettingsPage() {
-  const { settings, saveTokens, saveGitHubScope, saveLLMConfig, loading } = useSettingsStore();
+  const { settings, saveTokens, saveGitHubScope, saveLLMConfig, testToken, loading } = useSettingsStore();
   const { addToast } = useToastStore();
   const [activeTab, setActiveTab] = useState('api');
   const [showTokens, setShowTokens] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState<Record<string, boolean>>({});
+  const [hfIdentity, setHfIdentity] = useState<{ name: string; orgs: { name: string }[] } | null>(null);
   const [local, setLocal] = useState({
     hfToken: '',
     vercelToken: '',
@@ -85,18 +87,48 @@ export default function SettingsPage() {
     });
   }, [settings]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (settings.tokens.hf && activeTab === 'api') {
+      fetch('/api/hf/whoami', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (!cancelled && d) setHfIdentity({ name: d.name, orgs: d.orgs || [] }); })
+        .catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [settings.tokens.hf, activeTab]);
+
+  const handleTest = async (service: 'hfToken' | 'vercelToken' | 'githubToken' | 'dockerToken' | 'gitlabToken' | 'netlifyToken', value: string) => {
+    if (!value) {
+      addToast('error', `Enter a ${service} first`);
+      return;
+    }
+    setTesting((p) => ({ ...p, [service]: true }));
+    try {
+      const r = await testToken(service, value);
+      if (r.valid) {
+        addToast('success', `${service} is valid`);
+      } else {
+        addToast('error', r.error);
+      }
+    } finally {
+      setTesting((p) => ({ ...p, [service]: false }));
+    }
+  };
+
   const saveAllTokens = async () => {
     setSaving(true);
     try {
-      await saveTokens({
-        hfToken: local.hfToken,
-        vercelToken: local.vercelToken,
-        githubToken: local.githubToken,
-        dockerToken: local.dockerToken,
-        gitlabToken: local.gitlabToken,
-        netlifyToken: local.netlifyToken,
+      const payload: Record<string, string> = {
         gitlabUrl: local.gitlabUrl,
-      });
+      };
+      if (local.hfToken) payload.hfToken = local.hfToken;
+      if (local.vercelToken) payload.vercelToken = local.vercelToken;
+      if (local.githubToken) payload.githubToken = local.githubToken;
+      if (local.dockerToken) payload.dockerToken = local.dockerToken;
+      if (local.gitlabToken) payload.gitlabToken = local.gitlabToken;
+      if (local.netlifyToken) payload.netlifyToken = local.netlifyToken;
+      await saveTokens(payload);
       addToast('success', 'All tokens saved');
     } catch (e) {
       addToast('error', e instanceof Error ? e.message : 'Failed to save');
@@ -152,18 +184,40 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2 text-sm text-text-secondary">
               <span className={`w-1.5 h-1.5 rounded-full ${t.hf ? 'bg-emerald' : 'bg-text-muted'}`} />
               HF: {t.hf ? 'configured' : 'not set'}
+              {hfIdentity && <span className="text-text-muted">— signed in as <span className="text-text-primary">{hfIdentity.name}</span>{hfIdentity.orgs.length > 0 ? `, ${hfIdentity.orgs.length} org${hfIdentity.orgs.length === 1 ? '' : 's'}` : ''}</span>}
             </div>
-            <TokenInput id="hf" label="Hugging Face" value={local.hfToken} onChange={(v) => setLocal({ ...local, hfToken: v })} placeholder="hf_..." show={!!showTokens.hf} onToggleShow={() => toggleShow('hf')} />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <TokenInput id="hf" label="Hugging Face" value={local.hfToken} onChange={(v) => setLocal({ ...local, hfToken: v })} placeholder="hf_..." show={!!showTokens.hf} onToggleShow={() => toggleShow('hf')} />
+              </div>
+              <div className="pt-7">
+                <Button type="button" onClick={() => handleTest('hfToken', local.hfToken)} loading={testing.hfToken} variant="secondary">Test</Button>
+              </div>
+            </div>
             <div className="flex items-center gap-2 text-sm text-text-secondary">
               <span className={`w-1.5 h-1.5 rounded-full ${t.vercel ? 'bg-emerald' : 'bg-text-muted'}`} />
               Vercel: {t.vercel ? 'configured' : 'not set'}
             </div>
-            <TokenInput id="vercel" label="Vercel" value={local.vercelToken} onChange={(v) => setLocal({ ...local, vercelToken: v })} placeholder="vercel_..." show={!!showTokens.vercel} onToggleShow={() => toggleShow('vercel')} />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <TokenInput id="vercel" label="Vercel" value={local.vercelToken} onChange={(v) => setLocal({ ...local, vercelToken: v })} placeholder="vercel_..." show={!!showTokens.vercel} onToggleShow={() => toggleShow('vercel')} />
+              </div>
+              <div className="pt-7">
+                <Button type="button" onClick={() => handleTest('vercelToken', local.vercelToken)} loading={testing.vercelToken} variant="secondary">Test</Button>
+              </div>
+            </div>
             <div className="flex items-center gap-2 text-sm text-text-secondary">
               <span className={`w-1.5 h-1.5 rounded-full ${t.github ? 'bg-emerald' : 'bg-text-muted'}`} />
               GitHub: {t.github ? 'configured' : 'not set'}
             </div>
-            <TokenInput id="github" label="GitHub" value={local.githubToken} onChange={(v) => setLocal({ ...local, githubToken: v })} placeholder="ghp_..." show={!!showTokens.github} onToggleShow={() => toggleShow('github')} />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <TokenInput id="github" label="GitHub" value={local.githubToken} onChange={(v) => setLocal({ ...local, githubToken: v })} placeholder="ghp_..." show={!!showTokens.github} onToggleShow={() => toggleShow('github')} />
+              </div>
+              <div className="pt-7">
+                <Button type="button" onClick={() => handleTest('githubToken', local.githubToken)} loading={testing.githubToken} variant="secondary">Test</Button>
+              </div>
+            </div>
 
             <div className="h-px bg-border-primary" />
 
@@ -172,7 +226,14 @@ export default function SettingsPage() {
               <span className={`w-1.5 h-1.5 rounded-full ${t.docker ? 'bg-emerald' : 'bg-text-muted'}`} />
               Docker Hub: {t.docker ? 'configured' : 'not set'}
             </div>
-            <TokenInput id="docker" label="Docker Token" value={local.dockerToken} onChange={(v) => setLocal({ ...local, dockerToken: v })} placeholder="dckr_..." show={!!showTokens.docker} onToggleShow={() => toggleShow('docker')} />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <TokenInput id="docker" label="Docker Token" value={local.dockerToken} onChange={(v) => setLocal({ ...local, dockerToken: v })} placeholder="dckr_..." show={!!showTokens.docker} onToggleShow={() => toggleShow('docker')} />
+              </div>
+              <div className="pt-7">
+                <Button type="button" onClick={() => handleTest('dockerToken', local.dockerToken)} loading={testing.dockerToken} variant="secondary">Test</Button>
+              </div>
+            </div>
 
             <div className="h-px bg-border-primary" />
 
@@ -181,7 +242,14 @@ export default function SettingsPage() {
               <span className={`w-1.5 h-1.5 rounded-full ${t.gitlab ? 'bg-emerald' : 'bg-text-muted'}`} />
               GitLab: {t.gitlab ? 'configured' : 'not set'}
             </div>
-            <TokenInput id="gitlab" label="GitLab Token" value={local.gitlabToken} onChange={(v) => setLocal({ ...local, gitlabToken: v })} placeholder="glpat_..." show={!!showTokens.gitlab} onToggleShow={() => toggleShow('gitlab')} />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <TokenInput id="gitlab" label="GitLab Token" value={local.gitlabToken} onChange={(v) => setLocal({ ...local, gitlabToken: v })} placeholder="glpat_..." show={!!showTokens.gitlab} onToggleShow={() => toggleShow('gitlab')} />
+              </div>
+              <div className="pt-7">
+                <Button type="button" onClick={() => handleTest('gitlabToken', local.gitlabToken)} loading={testing.gitlabToken} variant="secondary">Test</Button>
+              </div>
+            </div>
             <Input label="GitLab URL" type="text" placeholder="https://gitlab.com" value={local.gitlabUrl} onChange={(e) => setLocal({ ...local, gitlabUrl: e.target.value })} />
 
             <div className="h-px bg-border-primary" />
@@ -191,7 +259,14 @@ export default function SettingsPage() {
               <span className={`w-1.5 h-1.5 rounded-full ${t.netlify ? 'bg-emerald' : 'bg-text-muted'}`} />
               Netlify: {t.netlify ? 'configured' : 'not set'}
             </div>
-            <TokenInput id="netlify" label="Netlify Token" value={local.netlifyToken} onChange={(v) => setLocal({ ...local, netlifyToken: v })} placeholder="nfpt_..." show={!!showTokens.netlify} onToggleShow={() => toggleShow('netlify')} />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <TokenInput id="netlify" label="Netlify Token" value={local.netlifyToken} onChange={(v) => setLocal({ ...local, netlifyToken: v })} placeholder="nfpt_..." show={!!showTokens.netlify} onToggleShow={() => toggleShow('netlify')} />
+              </div>
+              <div className="pt-7">
+                <Button type="button" onClick={() => handleTest('netlifyToken', local.netlifyToken)} loading={testing.netlifyToken} variant="secondary">Test</Button>
+              </div>
+            </div>
 
             <Button onClick={saveAllTokens} loading={saving || loading} className="mt-2">
               <Save size={14} /> Save Tokens
@@ -216,6 +291,9 @@ export default function SettingsPage() {
             {settings.llmConfig.provider === 'custom' && (
               <Input label="Base URL" type="text" placeholder="https://your-api.com/v1" value={local.llmBaseUrl} onChange={(e) => setLocal({ ...local, llmBaseUrl: e.target.value })} />
             )}
+            <p className="text-xs text-text-muted">
+              Configure provider + key + model, then click Save. After save, test by sending a message in the AI Agent page.
+            </p>
             <div className="flex gap-2">
               <Button onClick={saveLLM} loading={saving || loading}><Save size={14} /> Save LLM Config</Button>
             </div>

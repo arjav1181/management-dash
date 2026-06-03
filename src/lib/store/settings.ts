@@ -37,6 +37,10 @@ interface SettingsState {
   saveLLMConfig: (config: { provider?: LLMConfig['provider']; model?: string; baseUrl?: string; apiKey?: string }) => Promise<void>;
   hasToken: (service: 'hf' | 'vercel' | 'github' | 'docker' | 'gitlab' | 'netlify') => boolean;
   hasLLM: () => boolean;
+  testToken: (
+    service: 'hfToken' | 'vercelToken' | 'githubToken' | 'dockerToken' | 'gitlabToken' | 'netlifyToken',
+    token: string
+  ) => Promise<{ valid: true; identity?: unknown } | { valid: false; error: string }>;
 }
 
 const DEFAULT_SETTINGS: ClientSettings = {
@@ -121,11 +125,28 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
       });
-      if (!res.ok) throw new Error('Failed to save');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error || `Save failed (${res.status})`);
+      }
       await get().refreshSettings();
     } finally {
       set({ loading: false });
     }
+  },
+
+  testToken: async (service: 'hfToken' | 'vercelToken' | 'githubToken' | 'dockerToken' | 'gitlabToken' | 'netlifyToken', token: string) => {
+    const res = await fetch('/api/settings/test-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ service, token }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = (data as { error?: string }).error || `Test failed (${res.status})`;
+      return { valid: false, error: msg } as const;
+    }
+    return { valid: true, identity: (data as { identity?: unknown }).identity } as const;
   },
 
   saveGitHubScope: async (scope) => {

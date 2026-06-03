@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, errorResponse, jsonOk, HttpError } from '@/lib/server/auth';
 import { loadSettings } from '@/lib/server/settings';
-import { sleepSpace } from '@/lib/api/huggingface';
-import { logActivity } from '@/lib/server/activity';
+import { sleepSpace, HFError } from '@/lib/api/huggingface';
+import { logActivity, pushNotification } from '@/lib/server/activity';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -10,11 +12,21 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const ctx = await requireAuth();
     const { settings } = await loadSettings(ctx.supabase, ctx.userId);
     if (!settings.hfToken) throw new HttpError(400, 'HF token not configured');
-    const ok = await sleepSpace(settings.hfToken, id);
-    if (ok) {
-      await logActivity(ctx.supabase, ctx.userId, 'huggingface', 'sleep', `Put ${id} to sleep`, `/huggingface/${id}`);
+    try {
+      await sleepSpace(settings.hfToken, id);
+    } catch (e) {
+      if (e instanceof HFError) throw new HttpError(e.status || 502, e.message);
+      throw e;
     }
-    return jsonOk({ success: ok });
+    await logActivity(ctx.supabase, ctx.userId, 'huggingface', 'sleep', `Slept space ${id}`, `/huggingface/${id}`);
+    await pushNotification(ctx.supabase, ctx.userId, {
+      type: 'system',
+      platform: 'huggingface',
+      title: `Space ${id} put to sleep`,
+      message: 'The space will wake on next request.',
+      link: `/huggingface/${id}`,
+    });
+    return jsonOk({ success: true });
   } catch (e) {
     return errorResponse(e);
   }
