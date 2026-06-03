@@ -1,26 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listIssues, createIssue } from '@/lib/api/github';
+import { requireAuth, errorResponse, jsonOk, HttpError } from '@/lib/server/auth';
+import { loadSettings } from '@/lib/server/settings';
+import { listIssues } from '@/lib/api/github';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ owner: string; repo: string }> }) {
-  const { owner, repo } = await params;
-  const token = req.headers.get('authorization')?.replace('Bearer ', '') || '';
-  const state = req.nextUrl.searchParams.get('state') || 'open';
   try {
-    const issues = await listIssues(token, owner, repo, state as 'open' | 'closed' | 'all');
-    return NextResponse.json(issues);
-  } catch {
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
-  }
-}
-
-export async function POST(req: NextRequest, { params }: { params: Promise<{ owner: string; repo: string }> }) {
-  const { owner, repo } = await params;
-  const token = req.headers.get('authorization')?.replace('Bearer ', '') || '';
-  try {
-    const body = await req.json();
-    const ok = await createIssue(token, owner, repo, body.title, body.body, body.labels);
-    return NextResponse.json({ success: ok });
-  } catch {
-    return NextResponse.json({ success: false }, { status: 500 });
+    const { owner, repo } = await params;
+    const state = (req.nextUrl.searchParams.get('state') as 'open' | 'closed' | 'all') || 'open';
+    const ctx = await requireAuth();
+    const { settings } = await loadSettings(ctx.supabase, ctx.userId);
+    if (!settings.githubToken) throw new HttpError(400, 'GitHub token not configured');
+    const issues = await listIssues(settings.githubToken, owner, repo, state);
+    return jsonOk(issues);
+  } catch (e) {
+    return errorResponse(e);
   }
 }

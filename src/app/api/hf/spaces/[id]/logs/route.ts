@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, errorResponse, jsonOk, HttpError } from '@/lib/server/auth';
+import { loadSettings } from '@/lib/server/settings';
 import { getSpaceLogs } from '@/lib/api/huggingface';
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const token = req.headers.get('authorization')?.replace('Bearer ', '') || '';
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const logs = await getSpaceLogs(token, id);
-    return NextResponse.json(logs);
-  } catch {
-    return NextResponse.json({ error: 'Failed to fetch logs' }, { status: 500 });
+    const { id } = await params;
+    const ctx = await requireAuth();
+    const { settings } = await loadSettings(ctx.supabase, ctx.userId);
+    if (!settings.hfToken) throw new HttpError(400, 'HF token not configured');
+    const logs = await getSpaceLogs(settings.hfToken, id);
+    return jsonOk(logs);
+  } catch (e) {
+    return errorResponse(e);
   }
 }

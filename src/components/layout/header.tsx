@@ -1,9 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSettingsStore } from '@/lib/store/settings';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useNotifications } from '@/hooks/use-notifications';
 
 const pageTitles: Record<string, string> = {
   '/': 'Overview',
@@ -12,12 +14,19 @@ const pageTitles: Record<string, string> = {
   '/github': 'GitHub Repositories',
   '/agent': 'AI Agent',
   '/settings': 'Settings',
+  '/notifications': 'Notifications',
+  '/search': 'Search',
+  '/profile': 'Profile',
+  '/docker': 'Docker Hub',
+  '/gitlab': 'GitLab',
+  '/netlify': 'Netlify',
   '/login': 'Login',
 };
 
 export function Header() {
   const pathname = usePathname();
   const { user, logout } = useSettingsStore();
+  const { unread } = useNotifications();
 
   if (pathname === '/login') return null;
 
@@ -32,7 +41,22 @@ export function Header() {
       <div className="flex items-center gap-3">
         {user && (
           <>
-            <div className="flex items-center gap-2 text-sm text-text-secondary">
+            <Link
+              href="/notifications"
+              aria-label={`Notifications, ${unread} unread`}
+              className="relative p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors"
+            >
+              <Bell size={18} />
+              {unread > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose text-white text-[10px] font-semibold flex items-center justify-center"
+                >
+                  {unread > 99 ? '99+' : unread}
+                </span>
+              )}
+            </Link>
+            <div className="hidden sm:flex items-center gap-2 text-sm text-text-secondary">
               <User size={16} className="text-text-muted" />
               <span>{user.email}</span>
             </div>

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSettingsStore } from '@/lib/store/settings';
-import { getCommits, listIssues, listPRs, listActionRuns, createIssue, mergePR } from '@/lib/api/github';
 import { CommitList } from '@/components/github/commit-list';
 import { IssueList } from '@/components/github/issue-list';
 import { PRCard } from '@/components/github/pr-card';
@@ -23,7 +22,7 @@ export default function GitHubRepoDetailPage() {
   const router = useRouter();
   const owner = params.owner as string;
   const repo = params.repo as string;
-  const { settings } = useSettingsStore();
+  const { hasToken, settings } = useSettingsStore();
   const { addToast } = useToastStore();
   const [commits, setCommits] = useState<GitHubCommit[]>([]);
   const [issues, setIssues] = useState<GitHubIssue[]>([]);
@@ -37,14 +36,14 @@ export default function GitHubRepoDetailPage() {
   const canWrite = settings.githubScope === 'write' || settings.githubScope === 'admin';
 
   const fetchAll = async () => {
-    if (!settings.githubToken) return;
+    if (!hasToken('github')) return;
     setLoading(true);
     try {
       const [c, i, p, a] = await Promise.all([
-        getCommits(settings.githubToken, owner, repo),
-        listIssues(settings.githubToken, owner, repo),
-        listPRs(settings.githubToken, owner, repo),
-        listActionRuns(settings.githubToken, owner, repo),
+        fetch(`/api/github/repos/${owner}/${repo}/commits`).then((r) => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/github/repos/${owner}/${repo}/issues`).then((r) => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/github/repos/${owner}/${repo}/pulls`).then((r) => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/github/repos/${owner}/${repo}/actions`).then((r) => r.ok ? r.json() : []).catch(() => []),
       ]);
       setCommits(c);
       setIssues(i);
@@ -56,18 +55,17 @@ export default function GitHubRepoDetailPage() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchAll(); }, [owner, repo, settings.githubToken]);
+  useEffect(() => { fetchAll(); }, [owner, repo, hasToken('github')]);
 
   const handleCreateIssue = async () => {
     if (!newIssue.title.trim() || !canWrite) return;
-    const ok = await createIssue(
-      settings.githubToken,
-      owner,
-      repo,
-      newIssue.title,
-      newIssue.body || undefined
-    );
-    if (ok) {
+    const res = await fetch(`/api/github/repos/${owner}/${repo}/issues/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newIssue),
+    });
+    const data = await res.json();
+    if (data.success) {
       addToast('success', 'Issue created');
       setShowCreateIssue(false);
       setNewIssue({ title: '', body: '' });
@@ -77,8 +75,13 @@ export default function GitHubRepoDetailPage() {
 
   const handleMergePR = async (prNumber: number) => {
     if (!canWrite) return;
-    const ok = await mergePR(settings.githubToken, owner, repo, prNumber);
-    if (ok) {
+    const res = await fetch(`/api/github/repos/${owner}/${repo}/pulls/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pullNumber: prNumber }),
+    });
+    const data = await res.json();
+    if (data.success) {
       addToast('success', `PR #${prNumber} merged`);
       fetchAll();
     } else addToast('error', 'Failed to merge PR');
@@ -94,7 +97,7 @@ export default function GitHubRepoDetailPage() {
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => router.push('/github')}>
+        <Button variant="ghost" size="sm" onClick={() => router.push('/github')} aria-label="Back to repos">
           <ArrowLeft size={16} />
         </Button>
         <div className="flex items-center gap-2">
@@ -105,7 +108,7 @@ export default function GitHubRepoDetailPage() {
           </div>
         </div>
         <div className="flex-1" />
-        <Button size="sm" variant="secondary" onClick={fetchAll} loading={loading}>
+        <Button size="sm" variant="secondary" onClick={fetchAll} loading={loading} aria-label="Refresh">
           <RefreshCw size={14} />
         </Button>
         {canWrite && activeTab === 'issues' && (
@@ -158,6 +161,7 @@ export default function GitHubRepoDetailPage() {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleMergePR(pr.number)}
+                        aria-label={`Merge PR ${pr.number}`}
                       >
                         <GitMerge size={14} className="text-emerald" />
                       </Button>

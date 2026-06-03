@@ -230,6 +230,16 @@ export interface UserSettings {
   passwordHash: string;
 }
 
+export interface TokenStatus {
+  hf: boolean;
+  vercel: boolean;
+  github: boolean;
+  docker: boolean;
+  gitlab: boolean;
+  netlify: boolean;
+  llm: boolean;
+}
+
 export interface AuthUser {
   email: string;
   isLoggedIn: boolean;
@@ -271,9 +281,12 @@ export interface AgentMessage {
 export interface AgentAction {
   id: string;
   type: string;
-  status: 'pending' | 'approved' | 'executing' | 'done' | 'failed';
+  status: 'pending' | 'approved' | 'executing' | 'done' | 'failed' | 'awaiting_confirmation';
   description: string;
   requiresConfirmation: boolean;
+  ok?: boolean;
+  summary?: string;
+  args?: Record<string, unknown>;
 }
 
 // ─── Dashboard Widgets ──────────────────────────────────

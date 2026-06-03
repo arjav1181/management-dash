@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSettingsStore } from '@/lib/store/settings';
-import { getSpaceStatus, restartSpace, stopSpace, sleepSpace, listSpaceFiles } from '@/lib/api/huggingface';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SpaceControls } from '@/components/hf/space-controls';
 import { StatusBadge } from '@/components/ui/badge';
@@ -18,7 +17,7 @@ export default function SpaceDetailPage() {
   const params = useParams();
   const router = useRouter();
   const spaceId = params.spaceId as string;
-  const { settings } = useSettingsStore();
+  const { hasToken } = useSettingsStore();
   const { addToast } = useToastStore();
   const [status, setStatus] = useState<string>('');
   const [files, setFiles] = useState<HFFile[]>([]);
@@ -26,12 +25,20 @@ export default function SpaceDetailPage() {
   const [activeTab, setActiveTab] = useState('overview');
 
   const fetchData = async () => {
-    if (!settings.hfToken) return;
+    if (!hasToken('hf')) return;
     try {
-      const s = await getSpaceStatus(settings.hfToken, spaceId);
-      setStatus(s);
-      const f = await listSpaceFiles(settings.hfToken, spaceId);
-      setFiles(f.slice(0, 20));
+      const [statusRes, filesRes] = await Promise.all([
+        fetch(`/api/hf/spaces/${encodeURIComponent(spaceId)}/status`).catch(() => null),
+        fetch(`/api/hf/spaces/${encodeURIComponent(spaceId)}/files`).catch(() => null),
+      ]);
+      if (statusRes?.ok) {
+        const s = await statusRes.json();
+        setStatus(s.status);
+      }
+      if (filesRes?.ok) {
+        const f = await filesRes.json();
+        setFiles((f || []).slice(0, 20));
+      }
     } catch {
       addToast('error', 'Failed to load space data');
     }
@@ -39,12 +46,13 @@ export default function SpaceDetailPage() {
 
   useEffect(() => {
     fetchData();
-  }, [spaceId, settings.hfToken]);
+  }, [spaceId, hasToken('hf')]);
 
   const handleRestart = async () => {
     setActionLoading(true);
-    const ok = await restartSpace(settings.hfToken, spaceId);
-    if (ok) {
+    const res = await fetch(`/api/hf/spaces/${encodeURIComponent(spaceId)}/restart`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
       addToast('success', 'Space restarted');
       setTimeout(fetchData, 3000);
     } else addToast('error', 'Failed to restart');
@@ -53,8 +61,9 @@ export default function SpaceDetailPage() {
 
   const handleStop = async () => {
     setActionLoading(true);
-    const ok = await stopSpace(settings.hfToken, spaceId);
-    if (ok) {
+    const res = await fetch(`/api/hf/spaces/${encodeURIComponent(spaceId)}/stop`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
       addToast('success', 'Space stopped');
       fetchData();
     } else addToast('error', 'Failed to stop');
@@ -63,8 +72,9 @@ export default function SpaceDetailPage() {
 
   const handleSleep = async () => {
     setActionLoading(true);
-    const ok = await sleepSpace(settings.hfToken, spaceId);
-    if (ok) {
+    const res = await fetch(`/api/hf/spaces/${encodeURIComponent(spaceId)}/sleep`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
       addToast('success', 'Space sleeping');
       fetchData();
     } else addToast('error', 'Failed to sleep');
@@ -79,7 +89,7 @@ export default function SpaceDetailPage() {
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => router.push('/huggingface')}>
+        <Button variant="ghost" size="sm" onClick={() => router.push('/huggingface')} aria-label="Back to spaces">
           <ArrowLeft size={16} />
         </Button>
         <div>

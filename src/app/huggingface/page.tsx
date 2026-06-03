@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSettingsStore } from '@/lib/store/settings';
-import { listSpaces } from '@/lib/api/huggingface';
 import { SpaceCard } from '@/components/hf/space-card';
 import { Button } from '@/components/ui/button';
 import { SkeletonCard } from '@/components/ui/skeleton';
@@ -11,20 +10,25 @@ import { RefreshCw, Search, Boxes } from 'lucide-react';
 import type { HFSpace } from '@/types';
 
 export default function HFSpacesPage() {
-  const { settings } = useSettingsStore();
+  const { hasToken } = useSettingsStore();
   const router = useRouter();
   const [spaces, setSpaces] = useState<HFSpace[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   const fetchSpaces = async () => {
-    if (!settings.hfToken) {
+    if (!hasToken('hf')) {
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const data = await listSpaces(settings.hfToken);
+      const res = await fetch('/api/hf/spaces');
+      if (!res.ok) {
+        setSpaces([]);
+        return;
+      }
+      const data = await res.json();
       setSpaces(data);
     } catch {
       setSpaces([]);
@@ -34,7 +38,7 @@ export default function HFSpacesPage() {
 
   useEffect(() => {
     fetchSpaces();
-  }, [settings.hfToken]);
+  }, [hasToken('hf')]);
 
   const filtered = spaces.filter(
     (s) => s.name.toLowerCase().includes(search.toLowerCase())
@@ -54,6 +58,7 @@ export default function HFSpacesPage() {
             placeholder="Search spaces..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            aria-label="Search spaces"
           />
         </div>
         <Button size="sm" variant="secondary" onClick={fetchSpaces} loading={loading}>
@@ -62,7 +67,7 @@ export default function HFSpacesPage() {
         </Button>
       </div>
 
-      {!settings.hfToken && (
+      {!hasToken('hf') && (
         <div className="text-center py-12">
           <Boxes size={48} className="text-text-muted mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-text-primary mb-2">HF Token Required</h2>
@@ -71,7 +76,7 @@ export default function HFSpacesPage() {
         </div>
       )}
 
-      {settings.hfToken && loading && (
+      {hasToken('hf') && loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <SkeletonCard key={i} />
@@ -79,7 +84,7 @@ export default function HFSpacesPage() {
         </div>
       )}
 
-      {settings.hfToken && !loading && filtered.length === 0 && (
+      {hasToken('hf') && !loading && filtered.length === 0 && (
         <div className="text-center py-12">
           <p className="text-sm text-text-muted">No spaces found for this account</p>
         </div>

@@ -12,6 +12,7 @@ interface ConnectionManagerProps {
   selectedSpace: string;
   connectionType: 'ssh' | 'wss';
   connected: boolean;
+  wssReady?: boolean;
   onSelectSpace: (id: string) => void;
   onSelectType: (type: 'ssh' | 'wss') => void;
   onConnect: () => void;
@@ -24,6 +25,7 @@ export function ConnectionManager({
   selectedSpace,
   connectionType,
   connected,
+  wssReady,
   onSelectSpace,
   onSelectType,
   onConnect,
@@ -57,7 +59,7 @@ export function ConnectionManager({
             onChange={(e) => onSelectType(e.target.value as 'ssh' | 'wss')}
           />
 
-          {connectionType === 'wss' && !selectedSpaceData?.wssEnabled && (
+          {connectionType === 'wss' && !wssReady && (
             <div className="flex items-center justify-between p-3 rounded-lg bg-amber/5 border border-amber/20">
               <div>
                 <p className="text-sm text-text-primary">WSS agent not detected</p>

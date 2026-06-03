@@ -2,47 +2,48 @@
 
 import { create } from 'zustand';
 import { createClient } from '@/lib/supabase/client';
-import { fetchSettings, saveSettings } from '@/lib/supabase/db';
-import type { LLMConfig, GitHubScope } from '@/types';
+import type { LLMConfig, GitHubScope, TokenStatus } from '@/types';
 
-interface FlatSettings {
-  hfToken: string;
-  vercelToken: string;
-  githubToken: string;
-  dockerToken: string;
-  gitlabToken: string;
-  gitlabUrl: string;
-  netlifyToken: string;
+export interface ClientSettings {
   githubScope: GitHubScope;
-  llmConfig: LLMConfig;
+  gitlabUrl: string;
+  llmConfig: { provider: LLMConfig['provider']; model: string; baseUrl?: string };
+  tokens: TokenStatus;
 }
 
 interface SettingsState {
   hydrated: boolean;
   user: { id: string; email: string } | null;
-  settings: FlatSettings;
+  settings: ClientSettings;
   loading: boolean;
   init: () => Promise<void>;
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  updateToken: (service: 'hf' | 'vercel' | 'github' | 'docker' | 'gitlab' | 'netlify', token: string) => void;
-  updateGitLabUrl: (url: string) => void;
-  updateGitHubScope: (scope: GitHubScope) => void;
-  updateLLMConfig: (config: Partial<LLMConfig>) => void;
-  persistSettings: () => Promise<void>;
+  refreshSettings: () => Promise<void>;
+  saveTokens: (input: {
+    hfToken?: string;
+    vercelToken?: string;
+    githubToken?: string;
+    dockerToken?: string;
+    gitlabToken?: string;
+    gitlabUrl?: string;
+    netlifyToken?: string;
+    llmApiKey?: string;
+    llmModel?: string;
+    llmBaseUrl?: string;
+  }) => Promise<void>;
+  saveGitHubScope: (scope: GitHubScope) => Promise<void>;
+  saveLLMConfig: (config: { provider?: LLMConfig['provider']; model?: string; baseUrl?: string; apiKey?: string }) => Promise<void>;
+  hasToken: (service: 'hf' | 'vercel' | 'github' | 'docker' | 'gitlab' | 'netlify') => boolean;
+  hasLLM: () => boolean;
 }
 
-const DEFAULT_SETTINGS: FlatSettings = {
-  hfToken: '',
-  vercelToken: '',
-  githubToken: '',
-  dockerToken: '',
-  gitlabToken: '',
-  gitlabUrl: 'https://gitlab.com',
-  netlifyToken: '',
+const DEFAULT_SETTINGS: ClientSettings = {
   githubScope: 'read',
-  llmConfig: { provider: 'groq', apiKey: '', model: 'llama-3.1-8b-instant' },
+  gitlabUrl: 'https://gitlab.com',
+  llmConfig: { provider: 'groq', model: 'llama-3.1-8b-instant' },
+  tokens: { hf: false, vercel: false, github: false, docker: false, gitlab: false, netlify: false, llm: false },
 };
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
@@ -54,10 +55,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   init: async () => {
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) { set({ hydrated: true, user: null }); return; }
+    if (!session?.user) {
+      set({ hydrated: true, user: null });
+      return;
+    }
     const user = { id: session.user.id, email: session.user.email || '' };
-    const { settings } = await fetchSettings(supabase);
-    set({ hydrated: true, user, settings });
+    set({ user, hydrated: true });
+    await get().refreshSettings();
   },
 
   login: async (email, password) => {
@@ -67,8 +71,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return false;
     const user = { id: session.user.id, email: session.user.email || '' };
-    const { settings } = await fetchSettings(supabase);
-    set({ user, settings, hydrated: true });
+    set({ user, hydrated: true });
+    await get().refreshSettings();
     return true;
   },
 
@@ -79,8 +83,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return false;
     const user = { id: session.user.id, email: session.user.email || '' };
-    await fetchSettings(supabase);
-    set({ user, settings: DEFAULT_SETTINGS, hydrated: true });
+    set({ user, hydrated: true, settings: DEFAULT_SETTINGS });
     return true;
   },
 
@@ -90,34 +93,63 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ user: null, settings: DEFAULT_SETTINGS });
   },
 
-  updateToken: (service, token) =>
-    set((state) => ({
-      settings: {
-        ...state.settings,
-        ...(service === 'hf' && { hfToken: token }),
-        ...(service === 'vercel' && { vercelToken: token }),
-        ...(service === 'github' && { githubToken: token }),
-        ...(service === 'docker' && { dockerToken: token }),
-        ...(service === 'gitlab' && { gitlabToken: token }),
-        ...(service === 'netlify' && { netlifyToken: token }),
-      },
-    })),
-
-  updateGitLabUrl: (url) =>
-    set((state) => ({ settings: { ...state.settings, gitlabUrl: url } })),
-
-  updateGitHubScope: (scope) =>
-    set((state) => ({ settings: { ...state.settings, githubScope: scope } })),
-
-  updateLLMConfig: (config) =>
-    set((state) => ({
-      settings: { ...state.settings, llmConfig: { ...state.settings.llmConfig, ...config } },
-    })),
-
-  persistSettings: async () => {
-    const { user, settings } = get();
-    if (!user) return;
-    const supabase = createClient();
-    await saveSettings(supabase, settings);
+  refreshSettings: async () => {
+    try {
+      const res = await fetch('/api/settings/config', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json();
+      set({
+        settings: {
+          githubScope: data.githubScope ?? 'read',
+          gitlabUrl: data.gitlabUrl ?? 'https://gitlab.com',
+          llmConfig: {
+            provider: data.llmProvider ?? 'groq',
+            model: data.llmModel ?? 'llama-3.1-8b-instant',
+            baseUrl: data.llmBaseUrl || undefined,
+          },
+          tokens: data.tokens ?? DEFAULT_SETTINGS.tokens,
+        },
+      });
+    } catch {}
   },
+
+  saveTokens: async (input) => {
+    set({ loading: true });
+    try {
+      const res = await fetch('/api/settings/tokens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      await get().refreshSettings();
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  saveGitHubScope: async (scope) => {
+    const res = await fetch('/api/settings/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ githubScope: scope }),
+    });
+    if (res.ok) await get().refreshSettings();
+  },
+
+  saveLLMConfig: async (config) => {
+    const res = await fetch('/api/settings/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
+    if (res.ok) await get().refreshSettings();
+  },
+
+  hasToken: (service) => {
+    const t = get().settings.tokens;
+    return !!t[service];
+  },
+
+  hasLLM: () => !!get().settings.tokens.llm,
 }));

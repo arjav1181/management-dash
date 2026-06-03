@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import type { AgentMessage } from '@/types';
 import { cn } from '@/lib/utils/cn';
 import { Button } from '@/components/ui/button';
-import { Send, Bot, User, Loader2, Terminal, AlertTriangle } from 'lucide-react';
+import { Send, Bot, User, Loader2, Terminal, AlertTriangle, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 interface ChatPanelProps {
   messages: AgentMessage[];
@@ -34,10 +34,10 @@ export function ChatPanel({ messages, onSend, loading, className }: ChatPanelPro
   };
 
   const suggestions = [
-    'List all my HF Spaces',
-    'Show Vercel deployments',
-    'Restart the last failed space',
-    'What GitHub issues are open?',
+    'List my HF Spaces and their status',
+    'Show recent Vercel deployments',
+    'What GitHub issues are open across my repos?',
+    'Show me my repos with the most stars',
   ];
 
   return (
@@ -85,18 +85,32 @@ export function ChatPanel({ messages, onSend, loading, className }: ChatPanelPro
                 <p className="whitespace-pre-wrap">{msg.content}</p>
                 {msg.actions && msg.actions.length > 0 && (
                   <div className="mt-2 space-y-1">
-                    {msg.actions.map((action) => (
-                      <div key={action.id} className="flex items-center gap-2 text-xs text-text-muted">
-                        {action.status === 'executing' ? (
-                          <Loader2 size={12} className="animate-spin text-amber" />
-                        ) : action.status === 'done' ? (
-                          <Terminal size={12} className="text-emerald" />
-                        ) : action.status === 'failed' ? (
-                          <AlertTriangle size={12} className="text-rose" />
-                        ) : null}
-                        <span>{action.description}</span>
-                      </div>
-                    ))}
+                    {msg.actions.map((action) => {
+                      const isAwaiting = action.status === 'awaiting_confirmation' || action.status === 'pending';
+                      const isOk = action.ok === true;
+                      const isFail = action.ok === false;
+                      const Icon = isAwaiting
+                        ? Clock
+                        : loading && action.status === 'executing'
+                          ? Loader2
+                          : isOk
+                            ? CheckCircle2
+                            : isFail
+                              ? XCircle
+                              : action.status === 'failed' ? AlertTriangle : Terminal;
+                      const tone = isAwaiting
+                        ? 'text-amber'
+                        : isOk ? 'text-emerald' : isFail || action.status === 'failed' ? 'text-rose' : 'text-text-muted';
+                      return (
+                        <div key={action.id} className="flex items-center gap-2 text-xs text-text-muted">
+                          <Icon size={12} className={cn(tone, loading && action.status === 'executing' && 'animate-spin')} />
+                          <span>
+                            {action.description}
+                            {action.summary ? `: ${action.summary}` : ''}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

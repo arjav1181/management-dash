@@ -1,35 +1,35 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SkeletonCard } from '@/components/ui/skeleton';
 import { Search, RefreshCw, GitBranch, GitFork, Eye } from 'lucide-react';
 import { useSettingsStore } from '@/lib/store/settings';
-import { listProjects } from '@/lib/api/gitlab';
 import type { GitLabProject } from '@/types';
 import { useToastStore } from '@/components/ui/toast';
-import Link from 'next/link';
 
 export default function GitLabPage() {
-  const { settings } = useSettingsStore();
+  const { hasToken } = useSettingsStore();
   const { addToast } = useToastStore();
   const [projects, setProjects] = useState<GitLabProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   const fetchProjects = async () => {
-    if (!settings.gitlabToken) { setLoading(false); return; }
+    if (!hasToken('gitlab')) { setLoading(false); return; }
     setLoading(true);
     try {
-      const data = await listProjects(settings.gitlabToken, settings.gitlabUrl || 'https://gitlab.com');
+      const res = await fetch('/api/gitlab/projects');
+      if (!res.ok) { setProjects([]); return; }
+      const data = await res.json();
       setProjects(data);
     } catch { setProjects([]); addToast('error', 'Failed to fetch GitLab projects'); }
     setLoading(false);
   };
 
-  useEffect(() => { fetchProjects(); }, [settings.gitlabToken]);
+  useEffect(() => { fetchProjects(); }, [hasToken('gitlab')]);
 
   const filtered = projects.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -38,12 +38,12 @@ export default function GitLabPage() {
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-          <input className="w-full rounded-lg border border-border-primary bg-bg-tertiary pl-10 pr-4 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/40" placeholder="Search projects..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input aria-label="Search projects" className="w-full rounded-lg border border-border-primary bg-bg-tertiary pl-10 pr-4 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/40" placeholder="Search projects..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Button size="sm" variant="secondary" onClick={fetchProjects} loading={loading}><RefreshCw size={14} /> Refresh</Button>
       </div>
 
-      {!settings.gitlabToken && (
+      {!hasToken('gitlab') && (
         <div className="text-center py-12">
           <GitBranch size={48} className="text-text-muted mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-text-primary mb-2">GitLab Token Required</h2>
@@ -51,13 +51,13 @@ export default function GitLabPage() {
         </div>
       )}
 
-      {settings.gitlabToken && loading && (
+      {hasToken('gitlab') && loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       )}
 
-      {settings.gitlabToken && !loading && (
+      {hasToken('gitlab') && !loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((project) => (
             <Card key={project.id} hover className="p-4">

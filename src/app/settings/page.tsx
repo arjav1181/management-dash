@@ -17,8 +17,42 @@ const SCOPE_OPTIONS = [
   { value: 'admin', label: 'Admin (full repo management)' },
 ];
 
+interface TokenInputProps {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  show: boolean;
+  onToggleShow: () => void;
+}
+
+function TokenInput({ id, label, value, onChange, placeholder, show, onToggleShow }: TokenInputProps) {
+  return (
+    <div className="relative">
+      <Input
+        label={label}
+        type={show ? 'text' : 'password'}
+        placeholder={placeholder || `${label}...`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        autoComplete="off"
+        spellCheck={false}
+      />
+      <button
+        type="button"
+        aria-label={show ? `Hide ${label}` : `Show ${label}`}
+        onClick={onToggleShow}
+        className="absolute right-3 top-[38px] text-text-muted hover:text-text-primary transition-colors"
+      >
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
-  const { settings, updateToken, updateGitLabUrl, updateGitHubScope, updateLLMConfig, persistSettings } = useSettingsStore();
+  const { settings, saveTokens, saveGitHubScope, saveLLMConfig, loading } = useSettingsStore();
   const { addToast } = useToastStore();
   const [activeTab, setActiveTab] = useState('api');
   const [showTokens, setShowTokens] = useState<Record<string, boolean>>({});
@@ -38,14 +72,14 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setLocal({
-      hfToken: settings.hfToken,
-      vercelToken: settings.vercelToken,
-      githubToken: settings.githubToken,
-      dockerToken: settings.dockerToken,
-      gitlabToken: settings.gitlabToken,
+      hfToken: '',
+      vercelToken: '',
+      githubToken: '',
+      dockerToken: '',
+      gitlabToken: '',
       gitlabUrl: settings.gitlabUrl,
-      netlifyToken: settings.netlifyToken,
-      llmApiKey: settings.llmConfig.apiKey,
+      netlifyToken: '',
+      llmApiKey: '',
       llmModel: settings.llmConfig.model,
       llmBaseUrl: settings.llmConfig.baseUrl || '',
     });
@@ -53,24 +87,38 @@ export default function SettingsPage() {
 
   const saveAllTokens = async () => {
     setSaving(true);
-    updateToken('hf', local.hfToken);
-    updateToken('vercel', local.vercelToken);
-    updateToken('github', local.githubToken);
-    updateToken('docker', local.dockerToken);
-    updateToken('gitlab', local.gitlabToken);
-    updateToken('netlify', local.netlifyToken);
-    updateGitLabUrl(local.gitlabUrl);
-    await persistSettings();
-    addToast('success', 'All tokens saved');
-    setSaving(false);
+    try {
+      await saveTokens({
+        hfToken: local.hfToken,
+        vercelToken: local.vercelToken,
+        githubToken: local.githubToken,
+        dockerToken: local.dockerToken,
+        gitlabToken: local.gitlabToken,
+        netlifyToken: local.netlifyToken,
+        gitlabUrl: local.gitlabUrl,
+      });
+      addToast('success', 'All tokens saved');
+    } catch (e) {
+      addToast('error', e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const saveLLM = async () => {
     setSaving(true);
-    updateLLMConfig({ apiKey: local.llmApiKey, model: local.llmModel, baseUrl: local.llmBaseUrl || undefined });
-    await persistSettings();
-    addToast('success', 'LLM config saved');
-    setSaving(false);
+    try {
+      await saveLLMConfig({
+        apiKey: local.llmApiKey,
+        model: local.llmModel,
+        baseUrl: local.llmBaseUrl || undefined,
+      });
+      addToast('success', 'LLM config saved');
+    } catch (e) {
+      addToast('error', e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const tabs = [
@@ -85,14 +133,7 @@ export default function SettingsPage() {
   const currentProvider = LLM_PROVIDERS.find((p) => p.value === settings.llmConfig.provider);
   const modelOptions = (currentProvider?.models || []).map((m) => ({ value: m, label: m }));
 
-  const TokenInput = ({ id, label, value, onChange, placeholder }: { id: string; label: string; value: string; onChange: (v: string) => void; placeholder?: string }) => (
-    <div className="relative">
-      <Input label={label} type={showTokens[id] ? 'text' : 'password'} placeholder={placeholder || `${label}...`} value={value} onChange={(e) => onChange(e.target.value)} />
-      <button onClick={() => toggleShow(id)} className="absolute right-3 top-[38px] text-text-muted hover:text-text-primary transition-colors">
-        {showTokens[id] ? <EyeOff size={16} /> : <Eye size={16} />}
-      </button>
-    </div>
-  );
+  const t = settings.tokens;
 
   return (
     <div className="max-w-2xl space-y-6 animate-fadeIn">
@@ -104,36 +145,56 @@ export default function SettingsPage() {
             <CardTitle className="flex items-center gap-2"><Key size={18} className="text-accent" /> API Tokens</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <p className="text-xs text-text-muted">Tokens are encrypted at rest in Supabase. Never shared.</p>
+            <p className="text-xs text-text-muted">
+              Tokens are encrypted at rest with AES-256-GCM. Leave blank to keep existing value.
+            </p>
 
-            <TokenInput id="hf" label="Hugging Face" value={local.hfToken} onChange={(v) => setLocal({ ...local, hfToken: v })} placeholder="hf_..." />
-            <TokenInput id="vercel" label="Vercel" value={local.vercelToken} onChange={(v) => setLocal({ ...local, vercelToken: v })} placeholder="vercel_..." />
-            <TokenInput id="github" label="GitHub" value={local.githubToken} onChange={(v) => setLocal({ ...local, githubToken: v })} placeholder="ghp_..." />
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <span className={`w-1.5 h-1.5 rounded-full ${t.hf ? 'bg-emerald' : 'bg-text-muted'}`} />
+              HF: {t.hf ? 'configured' : 'not set'}
+            </div>
+            <TokenInput id="hf" label="Hugging Face" value={local.hfToken} onChange={(v) => setLocal({ ...local, hfToken: v })} placeholder="hf_..." show={!!showTokens.hf} onToggleShow={() => toggleShow('hf')} />
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <span className={`w-1.5 h-1.5 rounded-full ${t.vercel ? 'bg-emerald' : 'bg-text-muted'}`} />
+              Vercel: {t.vercel ? 'configured' : 'not set'}
+            </div>
+            <TokenInput id="vercel" label="Vercel" value={local.vercelToken} onChange={(v) => setLocal({ ...local, vercelToken: v })} placeholder="vercel_..." show={!!showTokens.vercel} onToggleShow={() => toggleShow('vercel')} />
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <span className={`w-1.5 h-1.5 rounded-full ${t.github ? 'bg-emerald' : 'bg-text-muted'}`} />
+              GitHub: {t.github ? 'configured' : 'not set'}
+            </div>
+            <TokenInput id="github" label="GitHub" value={local.githubToken} onChange={(v) => setLocal({ ...local, githubToken: v })} placeholder="ghp_..." show={!!showTokens.github} onToggleShow={() => toggleShow('github')} />
 
             <div className="h-px bg-border-primary" />
 
             <div className="flex items-center gap-2 text-sm text-text-secondary">
-              <Container size={16} className="text-info" /> Docker Hub
+              <Container size={16} className="text-info" />
+              <span className={`w-1.5 h-1.5 rounded-full ${t.docker ? 'bg-emerald' : 'bg-text-muted'}`} />
+              Docker Hub: {t.docker ? 'configured' : 'not set'}
             </div>
-            <TokenInput id="docker" label="Docker Token" value={local.dockerToken} onChange={(v) => setLocal({ ...local, dockerToken: v })} placeholder="dckr_..." />
+            <TokenInput id="docker" label="Docker Token" value={local.dockerToken} onChange={(v) => setLocal({ ...local, dockerToken: v })} placeholder="dckr_..." show={!!showTokens.docker} onToggleShow={() => toggleShow('docker')} />
 
             <div className="h-px bg-border-primary" />
 
             <div className="flex items-center gap-2 text-sm text-text-secondary">
-              <GitBranch size={16} className="text-amber" /> GitLab
+              <GitBranch size={16} className="text-amber" />
+              <span className={`w-1.5 h-1.5 rounded-full ${t.gitlab ? 'bg-emerald' : 'bg-text-muted'}`} />
+              GitLab: {t.gitlab ? 'configured' : 'not set'}
             </div>
-            <TokenInput id="gitlab" label="GitLab Token" value={local.gitlabToken} onChange={(v) => setLocal({ ...local, gitlabToken: v })} placeholder="glpat_..." />
+            <TokenInput id="gitlab" label="GitLab Token" value={local.gitlabToken} onChange={(v) => setLocal({ ...local, gitlabToken: v })} placeholder="glpat_..." show={!!showTokens.gitlab} onToggleShow={() => toggleShow('gitlab')} />
             <Input label="GitLab URL" type="text" placeholder="https://gitlab.com" value={local.gitlabUrl} onChange={(e) => setLocal({ ...local, gitlabUrl: e.target.value })} />
 
             <div className="h-px bg-border-primary" />
 
             <div className="flex items-center gap-2 text-sm text-text-secondary">
-              <Globe size={16} className="text-emerald" /> Netlify
+              <Globe size={16} className="text-emerald" />
+              <span className={`w-1.5 h-1.5 rounded-full ${t.netlify ? 'bg-emerald' : 'bg-text-muted'}`} />
+              Netlify: {t.netlify ? 'configured' : 'not set'}
             </div>
-            <TokenInput id="netlify" label="Netlify Token" value={local.netlifyToken} onChange={(v) => setLocal({ ...local, netlifyToken: v })} placeholder="nfpt_..." />
+            <TokenInput id="netlify" label="Netlify Token" value={local.netlifyToken} onChange={(v) => setLocal({ ...local, netlifyToken: v })} placeholder="nfpt_..." show={!!showTokens.netlify} onToggleShow={() => toggleShow('netlify')} />
 
-            <Button onClick={saveAllTokens} loading={saving} className="mt-2">
-              <Save size={14} /> Save All Tokens
+            <Button onClick={saveAllTokens} loading={saving || loading} className="mt-2">
+              <Save size={14} /> Save Tokens
             </Button>
           </CardContent>
         </Card>
@@ -145,14 +206,18 @@ export default function SettingsPage() {
             <CardTitle className="flex items-center gap-2"><Bot size={18} className="text-accent" /> AI Agent Configuration</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Select label="Provider" options={providerOptions} value={settings.llmConfig.provider} onChange={(e) => updateLLMConfig({ provider: e.target.value as LLMConfig['provider'] })} />
-            <TokenInput id="llm" label="API Key" value={local.llmApiKey} onChange={(v) => setLocal({ ...local, llmApiKey: v })} placeholder="Enter provider API key..." />
-            <Select label="Model" options={modelOptions} value={local.llmModel} onChange={(e) => { setLocal({ ...local, llmModel: e.target.value }); updateLLMConfig({ model: e.target.value }); }} />
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <span className={`w-1.5 h-1.5 rounded-full ${t.llm ? 'bg-emerald' : 'bg-text-muted'}`} />
+              API key: {t.llm ? 'configured' : 'not set'}
+            </div>
+            <Select label="Provider" options={providerOptions} value={settings.llmConfig.provider} onChange={(e) => saveLLMConfig({ provider: e.target.value as LLMConfig['provider'] })} />
+            <TokenInput id="llm" label="API Key" value={local.llmApiKey} onChange={(v) => setLocal({ ...local, llmApiKey: v })} placeholder="Enter provider API key..." show={!!showTokens.llm} onToggleShow={() => toggleShow('llm')} />
+            <Select label="Model" options={modelOptions} value={local.llmModel} onChange={(e) => { setLocal({ ...local, llmModel: e.target.value }); saveLLMConfig({ model: e.target.value }); }} />
             {settings.llmConfig.provider === 'custom' && (
               <Input label="Base URL" type="text" placeholder="https://your-api.com/v1" value={local.llmBaseUrl} onChange={(e) => setLocal({ ...local, llmBaseUrl: e.target.value })} />
             )}
             <div className="flex gap-2">
-              <Button onClick={saveLLM} loading={saving}><Save size={14} /> Save LLM Config</Button>
+              <Button onClick={saveLLM} loading={saving || loading}><Save size={14} /> Save LLM Config</Button>
             </div>
           </CardContent>
         </Card>
@@ -164,10 +229,7 @@ export default function SettingsPage() {
             <CardTitle className="flex items-center gap-2"><Shield size={18} className="text-accent" /> GitHub Scope</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Select label="Permission Level" options={SCOPE_OPTIONS} value={settings.githubScope} onChange={(e) => { updateGitHubScope(e.target.value as 'read' | 'write' | 'admin'); }} />
-            <Button size="sm" onClick={async () => { setSaving(true); await persistSettings(); addToast('success', 'GitHub scope saved'); setSaving(false); }} loading={saving}>
-              <Save size={14} /> Save Scope
-            </Button>
+            <Select label="Permission Level" options={SCOPE_OPTIONS} value={settings.githubScope} onChange={(e) => { saveGitHubScope(e.target.value as 'read' | 'write' | 'admin'); }} />
             <div className="p-3 rounded-lg bg-bg-tertiary border border-border-primary">
               <p className="text-xs text-text-muted">
                 {settings.githubScope === 'read' && 'Can view repos, commits, issues, PRs, and CI status.'}

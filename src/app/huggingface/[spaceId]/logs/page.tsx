@@ -1,59 +1,57 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useSettingsStore } from '@/lib/store/settings';
-import { getSpaceLogs } from '@/lib/api/huggingface';
 import { LogViewer } from '@/components/hf/log-viewer';
 import { Button } from '@/components/ui/button';
-import { SkeletonLogViewer } from '@/components/ui/skeleton';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { useToastStore } from '@/components/ui/toast';
+import { RefreshCw } from 'lucide-react';
 import type { HFSpaceLog } from '@/types';
 
 export default function SpaceLogsPage() {
   const params = useParams();
-  const router = useRouter();
   const spaceId = params.spaceId as string;
-  const { settings } = useSettingsStore();
+  const { hasToken } = useSettingsStore();
+  const { addToast } = useToastStore();
   const [logs, setLogs] = useState<HFSpaceLog[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const fetchLogs = async () => {
-    if (!settings.hfToken) return;
+    if (!hasToken('hf')) return;
     setLoading(true);
     try {
-      const data = await getSpaceLogs(settings.hfToken, spaceId);
-      setLogs(data.slice(-200));
+      const res = await fetch(`/api/hf/spaces/${encodeURIComponent(spaceId)}/logs`);
+      if (!res.ok) {
+        addToast('error', 'Failed to fetch logs');
+        setLogs([]);
+        return;
+      }
+      const data = await res.json();
+      setLogs(data);
     } catch {
-      setLogs([]);
+      addToast('error', 'Failed to fetch logs');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
     fetchLogs();
-    const interval = setInterval(fetchLogs, 10000);
-    return () => clearInterval(interval);
-  }, [spaceId, settings.hfToken]);
+  }, [spaceId, hasToken('hf')]);
 
   return (
     <div className="space-y-4 animate-fadeIn">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
-          <ArrowLeft size={16} />
-        </Button>
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-text-primary">Logs</h2>
-          <p className="text-xs text-text-muted">{spaceId}</p>
+          <h2 className="text-lg font-semibold text-text-primary">Logs: {spaceId}</h2>
         </div>
-        <Badge variant="info" dot>Auto-refresh 10s</Badge>
-        <div className="flex-1" />
         <Button size="sm" variant="secondary" onClick={fetchLogs} loading={loading}>
           <RefreshCw size={14} />
+          Refresh
         </Button>
       </div>
-      {loading ? <SkeletonLogViewer /> : <LogViewer logs={logs} loading={false} />}
+      <LogViewer logs={logs} />
     </div>
   );
 }

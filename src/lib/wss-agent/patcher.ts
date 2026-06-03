@@ -4,11 +4,13 @@ import { readSpaceFile, writeSpaceFile, listSpaceFiles } from '@/lib/api/hugging
 interface PatchResult {
   success: boolean;
   message: string;
+  secret?: string;
 }
 
 export async function patchSpaceWithWssAgent(
   token: string,
-  spaceId: string
+  spaceId: string,
+  onSecret?: (secret: string) => Promise<void>
 ): Promise<PatchResult> {
   try {
     const secret = generateWssSecret();
@@ -55,9 +57,22 @@ export async function patchSpaceWithWssAgent(
       }
     }
 
+    if (onSecret) {
+      try {
+        await onSecret(secret);
+      } catch {
+        return {
+          success: true,
+          message: 'Patch applied, but failed to persist secret server-side',
+          secret,
+        };
+      }
+    }
+
     return {
       success: true,
-      message: `WSS agent patched successfully. Secret: ${secret.slice(0, 8)}...`,
+      message: 'WSS agent patched successfully',
+      secret: onSecret ? undefined : secret,
     };
   } catch (e) {
     return {

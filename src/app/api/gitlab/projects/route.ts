@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listProjects } from '@/lib/api/gitlab';
+import { requireAuth, errorResponse, jsonOk, HttpError } from '@/lib/server/auth';
+import { loadSettings } from '@/lib/server/settings';
+import { listProjects as listGitLabProjects } from '@/lib/api/gitlab';
 
-export async function GET(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '') || '';
-  const baseUrl = req.nextUrl.searchParams.get('baseUrl') || 'https://gitlab.com';
-  if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
+export async function GET() {
   try {
-    const projects = await listProjects(token, baseUrl);
-    return NextResponse.json(projects);
-  } catch {
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    const ctx = await requireAuth();
+    const { settings } = await loadSettings(ctx.supabase, ctx.userId);
+    if (!settings.gitlabToken) throw new HttpError(400, 'GitLab token not configured');
+    const projects = await listGitLabProjects(settings.gitlabToken, settings.gitlabUrl);
+    return jsonOk(projects);
+  } catch (e) {
+    return errorResponse(e);
   }
 }

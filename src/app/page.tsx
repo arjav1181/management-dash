@@ -20,9 +20,6 @@ import {
   Tooltip, BarChart, Bar, Legend,
 } from 'recharts';
 import type { HFSpace, VercelProject, GitHubRepo, ActivityItem, Platform } from '@/types';
-import { listSpaces } from '@/lib/api/huggingface';
-import { listProjects } from '@/lib/api/vercel';
-import { listRepos } from '@/lib/api/github';
 
 const platformColors: Record<Platform, string> = {
   huggingface: '#f59e0b',
@@ -56,7 +53,7 @@ const deploymentData = [
 ];
 
 export default function Home() {
-  const { settings } = useSettingsStore();
+  const { settings, hasToken } = useSettingsStore();
   const [spaces, setSpaces] = useState<HFSpace[]>([]);
   const [projects, setProjects] = useState<VercelProject[]>([]);
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
@@ -68,9 +65,9 @@ export default function Home() {
     setLoading(true);
     try {
       const [s, p, r] = await Promise.all([
-        settings.hfToken ? listSpaces(settings.hfToken).catch(() => []) : [],
-        settings.vercelToken ? listProjects(settings.vercelToken).catch(() => []) : [],
-        settings.githubToken ? listRepos(settings.githubToken, settings.githubScope).catch(() => []) : [],
+        hasToken('hf') ? fetch('/api/hf/spaces').then((r) => r.ok ? r.json() : []).catch(() => []) : Promise.resolve([]),
+        hasToken('vercel') ? fetch('/api/vercel/projects').then((r) => r.ok ? r.json() : []).catch(() => []) : Promise.resolve([]),
+        hasToken('github') ? fetch('/api/github/repos').then((r) => r.ok ? r.json() : []).catch(() => []) : Promise.resolve([]),
       ]);
       setSpaces(s);
       setProjects(p);
@@ -81,9 +78,9 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (settings.hfToken || settings.vercelToken || settings.githubToken) fetchData();
+    if (hasToken('hf') || hasToken('vercel') || hasToken('github')) fetchData();
     else setLoading(false);
-  }, [settings.hfToken, settings.vercelToken, settings.githubToken]);
+  }, [hasToken('hf'), hasToken('vercel'), hasToken('github')]);
 
   useEffect(() => {
     const items: ActivityItem[] = [];
@@ -106,9 +103,8 @@ export default function Home() {
   const readyProjects = projects.filter((p) => p.latestDeployments?.[0]?.state === 'READY').length;
   const totalIssues = repos.reduce((s, r) => s + r.openIssues, 0);
   const totalStars = repos.reduce((s, r) => s + r.stars, 0);
-  const hasTokens = settings.hfToken || settings.vercelToken || settings.githubToken;
+  const hasTokens = hasToken('hf') || hasToken('vercel') || hasToken('github');
 
-  // Pie chart data
   const spaceStatuses = [
     { name: 'Running', value: runningSpaces, color: '#22c55e' },
     { name: 'Sleeping', value: spaces.filter((s) => s.status === 'sleeping').length, color: '#06b6d4' },
@@ -133,7 +129,6 @@ export default function Home() {
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* Welcome + Refresh */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-xl font-bold text-text-primary flex items-center gap-2">
@@ -151,7 +146,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Health Score */}
       {hasTokens && !loading && (
         <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-accent/5 to-accent/[0.02] border border-accent/10">
           <div className="relative w-16 h-16">
@@ -175,14 +169,12 @@ export default function Home() {
         </div>
       )}
 
-      {/* Quick links */}
       <div className="flex flex-wrap gap-2">
         <Link href="/search"><Button size="sm" variant="secondary"><Search size={14} /> Search</Button></Link>
         <Link href="/notifications"><Button size="sm" variant="secondary"><Bell size={14} /> Notifications</Button></Link>
         <Link href="/profile"><Button size="sm" variant="secondary"><User size={14} /> Profile</Button></Link>
       </div>
 
-      {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => <SkeletonStatCard key={i} />)
@@ -198,9 +190,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Deployment Activity Chart */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
@@ -223,7 +213,6 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        {/* Space Status Pie */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
@@ -252,16 +241,14 @@ export default function Home() {
               </div>
             ) : (
               <p className="text-sm text-text-muted text-center py-8">
-                {settings.hfToken ? 'No spaces found' : 'Add HF token in Settings'}
+                {hasToken('hf') ? 'No spaces found' : 'Add HF token in Settings'}
               </p>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Data Tables Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* HF Spaces */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
@@ -280,14 +267,13 @@ export default function Home() {
               ))}
               {!loading && spaces.length === 0 && (
                 <p className="text-sm text-text-muted text-center py-6">
-                  {settings.hfToken ? 'No spaces found' : 'Add HF token in Settings'}
+                  {hasToken('hf') ? 'No spaces found' : 'Add HF token in Settings'}
                 </p>
               )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Vercel Deployments */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
@@ -309,7 +295,7 @@ export default function Home() {
               })}
               {!loading && projects.length === 0 && (
                 <p className="text-sm text-text-muted text-center py-6">
-                  {settings.vercelToken ? 'No projects found' : 'Add Vercel token in Settings'}
+                  {hasToken('vercel') ? 'No projects found' : 'Add Vercel token in Settings'}
                 </p>
               )}
             </div>
@@ -317,9 +303,7 @@ export default function Home() {
         </Card>
       </div>
 
-      {/* Bottom Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* GitHub Repos */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm">
@@ -338,7 +322,7 @@ export default function Home() {
               ))}
               {!loading && repos.length === 0 && (
                 <p className="text-sm text-text-muted text-center py-6">
-                  {settings.githubToken ? 'No repos found' : 'Add GitHub token in Settings'}
+                  {hasToken('github') ? 'No repos found' : 'Add GitHub token in Settings'}
                 </p>
               )}
             </div>

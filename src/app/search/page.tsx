@@ -1,12 +1,10 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Search, Boxes, Triangle, GitBranch, Container, ExternalLink, Loader2 } from 'lucide-react';
-import { useSettingsStore } from '@/lib/store/settings';
 import Link from 'next/link';
 
 interface SearchResult {
@@ -18,7 +16,7 @@ interface SearchResult {
   url: string;
 }
 
-const platformIcons = {
+const platformIcons: Record<SearchResult['platform'], React.ReactNode> = {
   huggingface: <Boxes size={14} />,
   vercel: <Triangle size={14} />,
   github: <GitBranch size={14} />,
@@ -28,41 +26,45 @@ const platformIcons = {
 };
 
 export default function SearchPage() {
-  const { settings } = useSettingsStore();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const performSearch = useCallback(async () => {
-    if (!query.trim()) return;
+  const performSearch = useCallback(async (q: string) => {
+    if (q.trim().length < 2) {
+      setResults([]);
+      setSearched(false);
+      return;
+    }
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setSearching(true);
-    const q = query.toLowerCase();
-    const found: SearchResult[] = [];
-
-    // Local search across configured platforms
-    if (settings.vercelToken) {
-      try {
-        const res = await fetch('/api/vercel/projects', { headers: { Authorization: `Bearer ${settings.vercelToken}` } });
-        const projects = await res.json();
-        (projects || []).filter((p: { name: string }) => p.name.toLowerCase().includes(q)).forEach((p: { id: string; name: string }) =>
-          found.push({ id: `v-${p.id}`, title: p.name, subtitle: 'Vercel Project', platform: 'vercel', type: 'project', url: `/vercel/${p.id}` })
-        );
-      } catch {}
+    setSearched(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q.trim())}`, { signal: controller.signal });
+      if (!res.ok) {
+        setResults([]);
+        return;
+      }
+      const data = await res.json();
+      setResults(data.results || []);
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') setResults([]);
+    } finally {
+      setSearching(false);
     }
+  }, []);
 
-    if (settings.githubToken) {
-      try {
-        const res = await fetch('/api/github/repos', { headers: { Authorization: `Bearer ${settings.githubToken}` } });
-        const repos = await res.json();
-        (repos || []).filter((r: { name: string }) => r.name.toLowerCase().includes(q)).forEach((r: { id: number; name: string; fullName: string }) =>
-          found.push({ id: `gh-${r.id}`, title: r.name, subtitle: r.fullName, platform: 'github', type: 'repo', url: `/github/${r.fullName}` })
-        );
-      } catch {}
-    }
-
-    setResults(found.slice(0, 20));
-    setSearching(false);
-  }, [query, settings]);
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      if (query.trim().length >= 2) void performSearch(query);
+      else if (query.trim().length === 0) { setResults([]); setSearched(false); }
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [query, performSearch]);
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -77,12 +79,12 @@ export default function SearchPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && performSearch()}
-            placeholder="Search spaces, projects, repos, images..."
+            placeholder="Search spaces, projects, repos, images, sites..."
+            aria-label="Search query"
             className="w-full rounded-xl border border-border-primary bg-bg-tertiary pl-12 pr-4 py-3.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/40 transition-all"
           />
         </div>
-        <Button onClick={performSearch} loading={searching}>
+        <Button onClick={() => performSearch(query)} loading={searching} disabled={query.trim().length < 2}>
           {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
           Search
         </Button>
@@ -111,14 +113,14 @@ export default function SearchPage() {
         </div>
       )}
 
-      {query && !searching && results.length === 0 && (
+      {searched && !searching && results.length === 0 && (
         <div className="text-center py-16">
           <Search size={48} className="text-text-muted mx-auto mb-4 opacity-30" />
           <p className="text-text-muted">No results found for &ldquo;{query}&rdquo;</p>
         </div>
       )}
 
-      {!query && (
+      {!searched && (
         <div className="text-center py-16">
           <Search size={48} className="text-text-muted mx-auto mb-4 opacity-20" />
           <p className="text-text-muted">Type to search across your infrastructure</p>

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSettingsStore } from '@/lib/store/settings';
-import { listDeployments, triggerDeploy, getDeploymentLogs } from '@/lib/api/vercel';
 import { DeploymentRow } from '@/components/vercel/deployment-row';
 import { DeploymentLogs } from '@/components/vercel/deployment-logs';
 import { Button } from '@/components/ui/button';
@@ -18,7 +17,7 @@ export default function VercelProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.projectId as string;
-  const { settings } = useSettingsStore();
+  const { hasToken } = useSettingsStore();
   const { addToast } = useToastStore();
   const [deployments, setDeployments] = useState<VercelDeployment[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
@@ -28,10 +27,15 @@ export default function VercelProjectDetailPage() {
   const [selectedDeploy, setSelectedDeploy] = useState<string | null>(null);
 
   const fetchDeployments = async () => {
-    if (!settings.vercelToken) return;
+    if (!hasToken('vercel')) return;
     setLoading(true);
     try {
-      const data = await listDeployments(settings.vercelToken, projectId);
+      const res = await fetch(`/api/vercel/projects/${encodeURIComponent(projectId)}/deployments`);
+      if (!res.ok) {
+        setDeployments([]);
+        return;
+      }
+      const data = await res.json();
       setDeployments(data);
     } catch {
       setDeployments([]);
@@ -39,12 +43,13 @@ export default function VercelProjectDetailPage() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchDeployments(); }, [projectId, settings.vercelToken]);
+  useEffect(() => { fetchDeployments(); }, [projectId, hasToken('vercel')]);
 
   const handleDeploy = async () => {
     setDeploying(true);
-    const ok = await triggerDeploy(settings.vercelToken, projectId);
-    if (ok) {
+    const res = await fetch(`/api/vercel/projects/${encodeURIComponent(projectId)}/deploy`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
       addToast('success', 'Deployment triggered');
       setTimeout(fetchDeployments, 3000);
     } else addToast('error', 'Failed to trigger deploy');
@@ -54,8 +59,16 @@ export default function VercelProjectDetailPage() {
   const viewLogs = async (deployId: string) => {
     setSelectedDeploy(deployId);
     setActiveTab('logs');
-    const data = await getDeploymentLogs(settings.vercelToken, deployId);
-    setLogs(data);
+    setLogs([]);
+    try {
+      const res = await fetch(`/api/vercel/deployments/${encodeURIComponent(deployId)}/logs`);
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data);
+      }
+    } catch {
+      setLogs([]);
+    }
   };
 
   const tabs = [
@@ -66,7 +79,7 @@ export default function VercelProjectDetailPage() {
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => router.push('/vercel')}>
+        <Button variant="ghost" size="sm" onClick={() => router.push('/vercel')} aria-label="Back to projects">
           <ArrowLeft size={16} />
         </Button>
         <div className="flex items-center gap-2">
@@ -77,7 +90,7 @@ export default function VercelProjectDetailPage() {
           </div>
         </div>
         <div className="flex-1" />
-        <Button size="sm" variant="secondary" onClick={fetchDeployments} loading={loading}>
+        <Button size="sm" variant="secondary" onClick={fetchDeployments} loading={loading} aria-label="Refresh">
           <RefreshCw size={14} />
         </Button>
         <Button size="sm" onClick={handleDeploy} loading={deploying}>

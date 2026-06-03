@@ -3,28 +3,31 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSettingsStore } from '@/lib/store/settings';
-import { listRepos } from '@/lib/api/github';
 import { RepoCard } from '@/components/github/repo-card';
 import { Button } from '@/components/ui/button';
 import { SkeletonCard } from '@/components/ui/skeleton';
-import { RefreshCw, Search, GitBranch } from 'lucide-react';
+import { RefreshCw, GitBranch } from 'lucide-react';
 import type { GitHubRepo } from '@/types';
 
 export default function GitHubPage() {
-  const { settings } = useSettingsStore();
+  const { hasToken } = useSettingsStore();
   const router = useRouter();
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
 
   const fetchRepos = async () => {
-    if (!settings.githubToken) {
+    if (!hasToken('github')) {
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const data = await listRepos(settings.githubToken, settings.githubScope);
+      const res = await fetch('/api/github/repos');
+      if (!res.ok) {
+        setRepos([]);
+        return;
+      }
+      const data = await res.json();
       setRepos(data);
     } catch {
       setRepos([]);
@@ -32,32 +35,24 @@ export default function GitHubPage() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchRepos(); }, [settings.githubToken, settings.githubScope]);
-
-  const filtered = repos.filter(
-    (r) =>
-      r.name.toLowerCase().includes(search.toLowerCase()) ||
-      (r.language || '').toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    fetchRepos();
+  }, [hasToken('github')]);
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-          <input
-            className="w-full rounded-lg border border-border-primary bg-bg-tertiary pl-10 pr-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
-            placeholder="Search repos..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-text-primary">GitHub Repositories</h2>
+          <p className="text-sm text-text-muted">{repos.length} repos</p>
         </div>
         <Button size="sm" variant="secondary" onClick={fetchRepos} loading={loading}>
           <RefreshCw size={14} />
+          Refresh
         </Button>
       </div>
 
-      {!settings.githubToken && (
+      {!hasToken('github') && (
         <div className="text-center py-12">
           <GitBranch size={48} className="text-text-muted mx-auto mb-4" />
           <h2 className="text-lg font-semibold text-text-primary mb-2">GitHub Token Required</h2>
@@ -66,7 +61,7 @@ export default function GitHubPage() {
         </div>
       )}
 
-      {loading && (
+      {hasToken('github') && loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <SkeletonCard key={i} />
@@ -74,9 +69,15 @@ export default function GitHubPage() {
         </div>
       )}
 
-      {!loading && (
+      {hasToken('github') && !loading && repos.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-sm text-text-muted">No repos found for this account</p>
+        </div>
+      )}
+
+      {!loading && repos.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((repo) => (
+          {repos.map((repo) => (
             <RepoCard key={repo.id} repo={repo} />
           ))}
         </div>

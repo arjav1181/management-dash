@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, errorResponse, jsonOk, HttpError } from '@/lib/server/auth';
+import { loadSettings } from '@/lib/server/settings';
 import { listRepos } from '@/lib/api/github';
 
-export async function GET(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '') || '';
-  const scope = req.nextUrl.searchParams.get('scope') || 'read';
-  if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
+export async function GET() {
   try {
-    const repos = await listRepos(token, scope as 'read' | 'write' | 'admin');
-    return NextResponse.json(repos);
-  } catch {
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    const ctx = await requireAuth();
+    const { settings } = await loadSettings(ctx.supabase, ctx.userId);
+    if (!settings.githubToken) throw new HttpError(400, 'GitHub token not configured');
+    const repos = await listRepos(settings.githubToken, settings.githubScope);
+    return jsonOk(repos);
+  } catch (e) {
+    return errorResponse(e);
   }
 }

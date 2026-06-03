@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { DocumentTitle } from '@/components/layout/document-title';
 import { ToastContainer } from '@/components/ui/toast';
 import { APP_NAME, APP_TAGLINE } from '@/lib/utils/constants';
 
@@ -49,6 +50,7 @@ export default function RootLayout({
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full bg-bg-primary text-text-primary">
         <DashboardLayout>
+          <DocumentTitle />
           {children}
         </DashboardLayout>
         <ToastContainer />

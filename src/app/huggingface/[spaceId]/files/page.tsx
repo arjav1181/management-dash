@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSettingsStore } from '@/lib/store/settings';
-import { listSpaceFiles, readSpaceFile, writeSpaceFile, deleteSpaceFile } from '@/lib/api/huggingface';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SkeletonFileTree, Skeleton } from '@/components/ui/skeleton';
@@ -18,34 +17,48 @@ export default function SpaceFilesPage() {
   const params = useParams();
   const router = useRouter();
   const spaceId = params.spaceId as string;
-  const { settings } = useSettingsStore();
+  const { hasToken } = useSettingsStore();
   const { addToast } = useToastStore();
   const [files, setFiles] = useState<HFFile[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
   const fetchFiles = async (path = '') => {
-    if (!settings.hfToken) return;
+    if (!hasToken('hf')) return;
     setLoading(true);
     try {
-      const data = await listSpaceFiles(settings.hfToken, spaceId, path);
+      const url = `/api/hf/spaces/${encodeURIComponent(spaceId)}/files${path ? `?path=${encodeURIComponent(path)}` : ''}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        addToast('error', 'Failed to list files');
+        setFiles([]);
+        return;
+      }
+      const data = await res.json();
       setFiles(data);
     } catch {
       addToast('error', 'Failed to list files');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
     fetchFiles();
-  }, [spaceId, settings.hfToken]);
+  }, [spaceId, hasToken('hf')]);
 
   const openFile = async (filePath: string) => {
-    if (!settings.hfToken) return;
     setSelectedFile(filePath);
     try {
-      const content = await readSpaceFile(settings.hfToken, spaceId, filePath);
+      const res = await fetch(`/api/hf/spaces/${encodeURIComponent(spaceId)}/file/${filePath.split('/').map(encodeURIComponent).join('/')}`);
+      if (!res.ok) {
+        addToast('error', 'Failed to read file');
+        setFileContent('');
+        return;
+      }
+      const content = await res.text();
       setFileContent(content);
     } catch {
       addToast('error', 'Failed to read file');
@@ -54,18 +67,25 @@ export default function SpaceFilesPage() {
   };
 
   const saveFile = async () => {
-    if (!selectedFile || !settings.hfToken) return;
+    if (!selectedFile) return;
     setSaving(true);
-    const ok = await writeSpaceFile(settings.hfToken, spaceId, selectedFile, fileContent);
-    if (ok) addToast('success', 'File saved');
+    const res = await fetch(`/api/hf/spaces/${encodeURIComponent(spaceId)}/file/${selectedFile.split('/').map(encodeURIComponent).join('/')}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/plain' },
+      body: fileContent,
+    });
+    const data = await res.json();
+    if (data.success) addToast('success', 'File saved');
     else addToast('error', 'Failed to save file');
     setSaving(false);
   };
 
   const deleteFile = async (filePath: string) => {
-    if (!settings.hfToken) return;
-    const ok = await deleteSpaceFile(settings.hfToken, spaceId, filePath);
-    if (ok) {
+    const res = await fetch(`/api/hf/spaces/${encodeURIComponent(spaceId)}/file/${filePath.split('/').map(encodeURIComponent).join('/')}`, {
+      method: 'DELETE',
+    });
+    const data = await res.json();
+    if (data.success) {
       addToast('success', 'File deleted');
       if (selectedFile === filePath) {
         setSelectedFile(null);
@@ -95,8 +115,9 @@ export default function SpaceFilesPage() {
               if (item.type === 'dir') fetchFiles(item.path);
               else openFile(item.path);
             }}
-            className="flex items-center gap-2 w-full px-2 py-1.5 text-sm hover:bg-bg-tertiary/50 rounded transition-colors"
+            className="flex items-center gap-2 w-full px-2 py-1.5 text-sm hover:bg-bg-tertiary/50 rounded transition-colors text-left"
             style={{ paddingLeft: `${depth * 16 + 8}px` }}
+            aria-label={item.type === 'dir' ? `Open folder ${item.name}` : `Open file ${item.name}`}
           >
             {item.type === 'dir' ? (
               <Folder size={14} className="text-amber" />
@@ -111,8 +132,9 @@ export default function SpaceFilesPage() {
             <button
               key={child.path}
               onClick={() => openFile(child.path)}
-              className="flex items-center gap-2 w-full px-2 py-1.5 text-sm hover:bg-bg-tertiary/50 rounded transition-colors"
+              className="flex items-center gap-2 w-full px-2 py-1.5 text-sm hover:bg-bg-tertiary/50 rounded transition-colors text-left"
               style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
+              aria-label={`Open file ${child.name}`}
             >
               <File size={14} className="text-text-muted" />
               <span className={`truncate ${selectedFile === child.path ? 'text-accent' : 'text-text-secondary'}`}>
@@ -128,7 +150,7 @@ export default function SpaceFilesPage() {
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => router.back()}>
+        <Button variant="ghost" size="sm" onClick={() => router.back()} aria-label="Back">
           <ArrowLeft size={16} />
         </Button>
         <div>
@@ -141,7 +163,7 @@ export default function SpaceFilesPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-[300px_1fr] gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-4">
         <Card className="max-h-[calc(100vh-12rem)] overflow-y-auto">
           <CardHeader>
             <CardTitle className="text-sm">Files</CardTitle>
@@ -164,7 +186,7 @@ export default function SpaceFilesPage() {
               <div className="flex items-center gap-2">
                 {selectedFile && (
                   <>
-                    <Button size="sm" variant="danger" onClick={() => deleteFile(selectedFile)}>
+                    <Button size="sm" variant="danger" onClick={() => deleteFile(selectedFile)} aria-label="Delete file">
                       <Trash2 size={14} />
                     </Button>
                     <Button size="sm" onClick={saveFile} loading={saving}>

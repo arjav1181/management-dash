@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listRepos } from '@/lib/api/docker';
+import { requireAuth, errorResponse, jsonOk, HttpError } from '@/lib/server/auth';
+import { loadSettings } from '@/lib/server/settings';
+import { listRepos as listDockerRepos } from '@/lib/api/docker';
 
-export async function GET(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '') || '';
-  if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
+export async function GET() {
   try {
-    const repos = await listRepos(token);
-    return NextResponse.json(repos);
-  } catch {
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    const ctx = await requireAuth();
+    const { settings } = await loadSettings(ctx.supabase, ctx.userId);
+    if (!settings.dockerToken) throw new HttpError(400, 'Docker token not configured');
+    const repos = await listDockerRepos(settings.dockerToken);
+    return jsonOk(repos);
+  } catch (e) {
+    return errorResponse(e);
   }
 }

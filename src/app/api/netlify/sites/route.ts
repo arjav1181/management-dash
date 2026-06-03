@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, errorResponse, jsonOk, HttpError } from '@/lib/server/auth';
+import { loadSettings } from '@/lib/server/settings';
 import { listSites } from '@/lib/api/netlify';
 
-export async function GET(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '') || '';
-  if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
+export async function GET() {
   try {
-    const sites = await listSites(token);
-    return NextResponse.json(sites);
-  } catch {
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    const ctx = await requireAuth();
+    const { settings } = await loadSettings(ctx.supabase, ctx.userId);
+    if (!settings.netlifyToken) throw new HttpError(400, 'Netlify token not configured');
+    const sites = await listSites(settings.netlifyToken);
+    return jsonOk(sites);
+  } catch (e) {
+    return errorResponse(e);
   }
 }

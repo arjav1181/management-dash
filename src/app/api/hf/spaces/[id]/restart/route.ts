@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, errorResponse, jsonOk, HttpError } from '@/lib/server/auth';
+import { loadSettings } from '@/lib/server/settings';
 import { restartSpace } from '@/lib/api/huggingface';
+import { logActivity, pushNotification } from '@/lib/server/activity';
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const token = req.headers.get('authorization')?.replace('Bearer ', '') || '';
+export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const ok = await restartSpace(token, id);
-    return NextResponse.json({ success: ok });
-  } catch {
-    return NextResponse.json({ success: false }, { status: 500 });
+    const { id } = await params;
+    const ctx = await requireAuth();
+    const { settings } = await loadSettings(ctx.supabase, ctx.userId);
+    if (!settings.hfToken) throw new HttpError(400, 'HF token not configured');
+    const ok = await restartSpace(settings.hfToken, id);
+    if (ok) {
+      await logActivity(ctx.supabase, ctx.userId, 'huggingface', 'restart', `Restarted space ${id}`, `/huggingface/${id}`);
+    }
+    return jsonOk({ success: ok });
+  } catch (e) {
+    return errorResponse(e);
   }
 }

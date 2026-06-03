@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, errorResponse, jsonOk, HttpError } from '@/lib/server/auth';
+import { loadSettings } from '@/lib/server/settings';
 import { listMRs } from '@/lib/api/gitlab';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const token = req.headers.get('authorization')?.replace('Bearer ', '') || '';
-  const baseUrl = req.nextUrl.searchParams.get('baseUrl') || 'https://gitlab.com';
-  const state = req.nextUrl.searchParams.get('state') || 'opened';
   try {
-    const mrs = await listMRs(token, Number(id), state as 'opened' | 'all', baseUrl);
-    return NextResponse.json(mrs);
-  } catch {
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    const { id } = await params;
+    const projectId = Number(id);
+    if (!Number.isFinite(projectId)) throw new HttpError(400, 'Invalid project id');
+    const state = (req.nextUrl.searchParams.get('state') as 'opened' | 'all') || 'opened';
+    const ctx = await requireAuth();
+    const { settings } = await loadSettings(ctx.supabase, ctx.userId);
+    if (!settings.gitlabToken) throw new HttpError(400, 'GitLab token not configured');
+    const mrs = await listMRs(settings.gitlabToken, projectId, state, settings.gitlabUrl);
+    return jsonOk(mrs);
+  } catch (e) {
+    return errorResponse(e);
   }
 }

@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, errorResponse, jsonOk, HttpError } from '@/lib/server/auth';
+import { loadSettings } from '@/lib/server/settings';
 import { listProjects } from '@/lib/api/vercel';
 
-export async function GET(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '') || '';
-  if (!token) return NextResponse.json({ error: 'No token' }, { status: 401 });
+export async function GET() {
   try {
-    const projects = await listProjects(token);
-    return NextResponse.json(projects);
-  } catch {
-    return NextResponse.json({ error: 'Failed to fetch projects' }, { status: 500 });
+    const ctx = await requireAuth();
+    const { settings } = await loadSettings(ctx.supabase, ctx.userId);
+    if (!settings.vercelToken) throw new HttpError(400, 'Vercel token not configured');
+    const projects = await listProjects(settings.vercelToken);
+    return jsonOk(projects);
+  } catch (e) {
+    return errorResponse(e);
   }
 }

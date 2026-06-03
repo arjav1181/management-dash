@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, errorResponse, jsonOk, HttpError } from '@/lib/server/auth';
+import { loadSettings } from '@/lib/server/settings';
 import { getRepoTags } from '@/lib/api/docker';
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ name: string }> }) {
-  const { name } = await params;
-  const token = req.headers.get('authorization')?.replace('Bearer ', '') || '';
-  const [namespace, repo] = name.split('/');
-  if (!namespace || !repo) return NextResponse.json({ error: 'Invalid name' }, { status: 400 });
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ name: string }> }) {
   try {
-    const tags = await getRepoTags(token, namespace, repo);
-    return NextResponse.json(tags);
-  } catch {
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    const { name } = await params;
+    const [namespace, repo] = name.split('/');
+    if (!namespace || !repo) throw new HttpError(400, 'Invalid name; expected namespace/repo');
+    const ctx = await requireAuth();
+    const { settings } = await loadSettings(ctx.supabase, ctx.userId);
+    if (!settings.dockerToken) throw new HttpError(400, 'Docker token not configured');
+    const tags = await getRepoTags(settings.dockerToken, namespace, repo);
+    return jsonOk(tags);
+  } catch (e) {
+    return errorResponse(e);
   }
 }

@@ -11,105 +11,127 @@ import { useToastStore } from '@/components/ui/toast';
 import { Bot, Settings } from 'lucide-react';
 import Link from 'next/link';
 import type { AgentMessage, AgentAction } from '@/types';
-import { nanoid } from 'nanoid';
 
 const INITIAL_MESSAGE: AgentMessage = {
   id: 'welcome',
   role: 'system',
-  content: 'I am your infrastructure management agent. I can help you monitor and manage your HF Spaces, Vercel deployments, and GitHub repositories. What would you like to do?',
+  content: 'I am your infrastructure management agent. I can list, monitor, and act on your HF Spaces, Vercel projects, and GitHub repositories. Destructive actions will ask for confirmation. What would you like to do?',
   timestamp: new Date().toISOString(),
 };
 
+interface ServerAction {
+  id: string;
+  tool: string;
+  args: Record<string, unknown>;
+  ok: boolean;
+  summary: string;
+  requiresConfirmation: boolean;
+  confirmed: boolean;
+}
+
+interface ServerResponse {
+  response: string;
+  actions: ServerAction[];
+  pendingConfirmation: ServerAction[];
+}
+
+function actionFromServer(sa: ServerAction): AgentAction {
+  return {
+    id: sa.id,
+    type: sa.tool,
+    description: sa.tool,
+    status: sa.confirmed ? (sa.ok ? 'done' : 'failed') : (sa.requiresConfirmation ? 'awaiting_confirmation' : 'executing'),
+    requiresConfirmation: sa.requiresConfirmation,
+    ok: sa.ok,
+    summary: sa.summary,
+    args: sa.args,
+  };
+}
+
 export default function AgentPage() {
-  const { settings } = useSettingsStore();
+  const { hasLLM } = useSettingsStore();
   const { addToast } = useToastStore();
   const [messages, setMessages] = useState<AgentMessage[]>([INITIAL_MESSAGE]);
   const [loading, setLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<AgentAction | null>(null);
+  const [lastRequest, setLastRequest] = useState<{ message: string; history: Array<{ role: string; content: string }> } | null>(null);
 
-  const hasLLM = !!(settings.llmConfig.apiKey);
+  const send = useCallback(async (
+    content: string,
+    history: Array<{ role: string; content: string }>,
+    approvedTools: string[] = []
+  ) => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/agent/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: content, history, approvedTools }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(err.error || 'Agent request failed');
+      }
+      const data: ServerResponse = await res.json();
+      const assistantMsg: AgentMessage = {
+        id: `a-${Date.now()}`,
+        role: 'assistant',
+        content: data.response || (data.actions.length ? 'Done.' : 'I have no response.'),
+        timestamp: new Date().toISOString(),
+        actions: data.actions.map(actionFromServer),
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
 
-  const handleSend = useCallback(async (content: string) => {
-    if (!hasLLM || loading) return;
+      const next = data.pendingConfirmation?.[0];
+      if (next) {
+        setPendingAction(actionFromServer(next));
+      }
+    } catch (e) {
+      const assistantMsg: AgentMessage = {
+        id: `a-${Date.now()}`,
+        role: 'assistant',
+        content: `Error: ${e instanceof Error ? e.message : 'Failed to communicate with agent'}`,
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
+  const handleSend = useCallback((content: string) => {
     const userMsg: AgentMessage = {
-      id: nanoid(),
+      id: `u-${Date.now()}`,
       role: 'user',
       content,
       timestamp: new Date().toISOString(),
     };
-
     setMessages((prev) => [...prev, userMsg]);
-    setLoading(true);
+    setLastRequest({ message: content, history: messages.slice(-10).map((m) => ({ role: m.role, content: m.content })) });
+    void send(content, messages.slice(-10).map((m) => ({ role: m.role, content: m.content })));
+  }, [messages, send]);
 
-    try {
-      const response = await fetch('/api/agent/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: content,
-          settings: {
-            llmConfig: settings.llmConfig,
-            hfToken: settings.hfToken,
-            vercelToken: settings.vercelToken,
-            githubToken: settings.githubToken,
-            githubScope: settings.githubScope,
-          },
-          history: messages.slice(-10).map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
-      });
-
-      if (!response.ok) throw new Error('Agent request failed');
-
-      const data = await response.json();
-
-      const assistantMsg: AgentMessage = {
-        id: nanoid(),
-        role: 'assistant',
-        content: data.response || 'I processed your request.',
-        timestamp: new Date().toISOString(),
-        actions: data.actions || [],
-      };
-
-      setMessages((prev) => [...prev, assistantMsg]);
-
-      if (data.actions?.length > 0) {
-        const action = data.actions.find((a: AgentAction) => a.requiresConfirmation);
-        if (action) setPendingAction(action);
-      }
-
-      if (data.toast) {
-        addToast(data.toast.type || 'info', data.toast.message);
-      }
-    } catch (e) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: nanoid(),
-          role: 'assistant',
-          content: `Error: ${e instanceof Error ? e.message : 'Failed to communicate with agent'}`,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-    }
-
-    setLoading(false);
-  }, [hasLLM, loading, messages, settings, addToast]);
-
-  const handleApproveAction = (_id: string) => {
+  const handleApproveAction = useCallback((id: string) => {
+    if (!lastRequest || !pendingAction) return;
     setPendingAction(null);
-    addToast('info', 'Action approved and executed');
-  };
+    setMessages((prev) => prev.map((m) => ({
+      ...m,
+      actions: m.actions?.map((a) => (a.id === id ? { ...a, status: 'approved' as const } : a)),
+    })));
+    addToast('info', `Approved ${pendingAction.description}`);
+    void send(lastRequest.message, lastRequest.history, [pendingAction.type]);
+  }, [lastRequest, pendingAction, send, addToast]);
 
-  const handleRejectAction = (_id: string) => {
+  const handleRejectAction = useCallback((id: string) => {
     setPendingAction(null);
+    setMessages((prev) => prev.map((m) => ({
+      ...m,
+      actions: m.actions?.map((a) => (a.id === id ? { ...a, status: 'failed' as const, ok: false, summary: 'Cancelled by user' } : a)),
+    })));
     addToast('info', 'Action cancelled');
-  };
+  }, [addToast]);
 
-  if (!hasLLM) {
+  if (!hasLLM()) {
     return (
       <div className="flex items-center justify-center min-h-[60vh] animate-fadeIn">
         <Card className="max-w-md text-center">
@@ -141,9 +163,6 @@ export default function AgentPage() {
           </CardTitle>
           <div className="flex items-center gap-2">
             <Badge variant="success" dot>Online</Badge>
-            <span className="text-xs text-text-muted">
-              {settings.llmConfig.provider} &middot; {settings.llmConfig.model}
-            </span>
           </div>
         </CardHeader>
         <CardContent className="flex-1 p-0 overflow-hidden">
