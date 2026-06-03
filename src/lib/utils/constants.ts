@@ -3,11 +3,17 @@ export const APP_TAGLINE = 'Unified infrastructure control center';
 
 export const NAV_ITEMS = [
   { label: 'Overview', href: '/', icon: 'LayoutDashboard' },
+  { label: 'Search', href: '/search', icon: 'Search' },
+  { label: 'Notifications', href: '/notifications', icon: 'Bell' },
   { label: 'HF Spaces', href: '/huggingface', icon: 'Boxes' },
   { label: 'Vercel', href: '/vercel', icon: 'Triangle' },
   { label: 'GitHub', href: '/github', icon: 'GitBranch' },
+  { label: 'Docker Hub', href: '/docker', icon: 'Container' },
+  { label: 'GitLab', href: '/gitlab', icon: 'GitBranch' },
+  { label: 'Netlify', href: '/netlify', icon: 'Triangle' },
   { label: 'Terminal', href: '/huggingface', icon: 'Terminal' },
   { label: 'AI Agent', href: '/agent', icon: 'Bot' },
+  { label: 'Profile', href: '/profile', icon: 'User' },
   { label: 'Settings', href: '/settings', icon: 'Settings' },
 ] as const;
 

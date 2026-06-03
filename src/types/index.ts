@@ -1,3 +1,4 @@
+// ─── HF Spaces ──────────────────────────────────────────
 export interface HFUser {
   name: string;
   avatarUrl: string;
@@ -32,6 +33,7 @@ export interface HFFile {
   children?: HFFile[];
 }
 
+// ─── Vercel ─────────────────────────────────────────────
 export interface VercelProject {
   id: string;
   name: string;
@@ -51,6 +53,7 @@ export interface VercelDeployment {
   meta: Record<string, string>;
 }
 
+// ─── GitHub ─────────────────────────────────────────────
 export interface GitHubRepo {
   id: number;
   name: string;
@@ -107,6 +110,92 @@ export interface GitHubActionRun {
   headBranch: string;
 }
 
+// ─── Docker Hub ─────────────────────────────────────────
+export interface DockerRepo {
+  name: string;
+  namespace: string;
+  repoName: string;
+  description: string;
+  starCount: number;
+  pullCount: number;
+  lastUpdated: string;
+  dateRegistered: string;
+  tags: string[];
+}
+
+export interface DockerTag {
+  name: string;
+  size: number;
+  lastPushed: string;
+  lastPulled: string;
+  digest: string;
+}
+
+// ─── GitLab ─────────────────────────────────────────────
+export interface GitLabProject {
+  id: number;
+  name: string;
+  nameWithNamespace: string;
+  pathWithNamespace: string;
+  description: string;
+  visibility: 'public' | 'private' | 'internal';
+  avatarUrl: string | null;
+  starCount: number;
+  forkCount: number;
+  openIssuesCount: number;
+  defaultBranch: string;
+  httpUrlToRepo: string;
+  lastActivityAt: string;
+}
+
+export interface GitLabPipeline {
+  id: number;
+  status: 'running' | 'pending' | 'success' | 'failed' | 'canceled' | 'skipped';
+  ref: string;
+  sha: string;
+  webUrl: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GitLabMR {
+  id: number;
+  iid: number;
+  title: string;
+  description: string;
+  state: 'opened' | 'closed' | 'merged' | 'locked';
+  draft: boolean;
+  sourceBranch: string;
+  targetBranch: string;
+  webUrl: string;
+  createdAt: string;
+}
+
+// ─── Netlify ────────────────────────────────────────────
+export interface NetlifySite {
+  id: string;
+  name: string;
+  url: string;
+  repoUrl: string | null;
+  buildSettings: { repo: string; branch: string } | null;
+  createdAt: string;
+  updatedAt: string;
+  publishedDeploy?: NetlifyDeploy;
+}
+
+export interface NetlifyDeploy {
+  id: string;
+  siteId: string;
+  deployUrl: string;
+  state: 'ready' | 'building' | 'error' | 'queued';
+  branch: string;
+  commitRef: string;
+  commitUrl: string;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+// ─── LLM & Agent ────────────────────────────────────────
 export interface LLMConfig {
   provider: 'groq' | 'gemini' | 'anthropic' | 'openai' | 'openrouter' | 'cerebras' | 'custom';
   apiKey: string;
@@ -126,10 +215,15 @@ export const LLM_PROVIDERS: { value: LLMConfig['provider']; label: string; model
 
 export type GitHubScope = 'read' | 'write' | 'admin';
 
+// ─── Settings ───────────────────────────────────────────
 export interface UserSettings {
   hfToken: string;
   vercelToken: string;
   githubToken: string;
+  dockerToken: string;
+  gitlabToken: string;
+  gitlabUrl: string;
+  netlifyToken: string;
   githubScope: GitHubScope;
   llmConfig: LLMConfig;
   email: string;
@@ -141,15 +235,31 @@ export interface AuthUser {
   isLoggedIn: boolean;
 }
 
+// ─── Activity & Notifications ───────────────────────────
+export type Platform = 'huggingface' | 'vercel' | 'github' | 'agent' | 'docker' | 'gitlab' | 'netlify';
+
 export interface ActivityItem {
   id: string;
-  platform: 'huggingface' | 'vercel' | 'github' | 'agent';
+  platform: Platform;
   type: string;
   message: string;
   timestamp: string;
   link?: string;
+  icon?: string;
 }
 
+export interface Notification {
+  id: string;
+  type: 'deploy_success' | 'deploy_fail' | 'build_complete' | 'space_error' | 'pr_merged' | 'issue_assigned' | 'pipeline_fail' | 'system';
+  platform: Platform;
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+  link?: string;
+}
+
+// ─── Agent ──────────────────────────────────────────────
 export interface AgentMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -164,4 +274,19 @@ export interface AgentAction {
   status: 'pending' | 'approved' | 'executing' | 'done' | 'failed';
   description: string;
   requiresConfirmation: boolean;
+}
+
+// ─── Dashboard Widgets ──────────────────────────────────
+export interface WidgetData {
+  totalSpaces: number;
+  runningSpaces: number;
+  totalVercel: number;
+  readyVercel: number;
+  totalRepos: number;
+  totalStars: number;
+  totalIssues: number;
+  totalDeployments: number;
+  failedDeployments: number;
+  healthScore: number;
+  recentEvents: ActivityItem[];
 }

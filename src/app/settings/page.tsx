@@ -9,7 +9,7 @@ import { Tabs } from '@/components/ui/tabs';
 import { useSettingsStore } from '@/lib/store/settings';
 import { useToastStore } from '@/components/ui/toast';
 import { LLM_PROVIDERS, type LLMConfig } from '@/types';
-import { Key, Bot, Shield, Eye, EyeOff, Save } from 'lucide-react';
+import { Key, Bot, Shield, Eye, EyeOff, Save, Globe, Container, GitBranch } from 'lucide-react';
 
 const SCOPE_OPTIONS = [
   { value: 'read', label: 'Read-only (repos, commits, issues, CI)' },
@@ -18,7 +18,7 @@ const SCOPE_OPTIONS = [
 ];
 
 export default function SettingsPage() {
-  const { settings, updateToken, updateGitHubScope, updateLLMConfig, persistSettings } = useSettingsStore();
+  const { settings, updateToken, updateGitLabUrl, updateGitHubScope, updateLLMConfig, persistSettings } = useSettingsStore();
   const { addToast } = useToastStore();
   const [activeTab, setActiveTab] = useState('api');
   const [showTokens, setShowTokens] = useState<Record<string, boolean>>({});
@@ -27,6 +27,10 @@ export default function SettingsPage() {
     hfToken: '',
     vercelToken: '',
     githubToken: '',
+    dockerToken: '',
+    gitlabToken: '',
+    gitlabUrl: 'https://gitlab.com',
+    netlifyToken: '',
     llmApiKey: '',
     llmModel: '',
     llmBaseUrl: '',
@@ -37,19 +41,27 @@ export default function SettingsPage() {
       hfToken: settings.hfToken,
       vercelToken: settings.vercelToken,
       githubToken: settings.githubToken,
+      dockerToken: settings.dockerToken,
+      gitlabToken: settings.gitlabToken,
+      gitlabUrl: settings.gitlabUrl,
+      netlifyToken: settings.netlifyToken,
       llmApiKey: settings.llmConfig.apiKey,
       llmModel: settings.llmConfig.model,
       llmBaseUrl: settings.llmConfig.baseUrl || '',
     });
   }, [settings]);
 
-  const saveTokens = async () => {
+  const saveAllTokens = async () => {
     setSaving(true);
     updateToken('hf', local.hfToken);
     updateToken('vercel', local.vercelToken);
     updateToken('github', local.githubToken);
+    updateToken('docker', local.dockerToken);
+    updateToken('gitlab', local.gitlabToken);
+    updateToken('netlify', local.netlifyToken);
+    updateGitLabUrl(local.gitlabUrl);
     await persistSettings();
-    addToast('success', 'API keys saved');
+    addToast('success', 'All tokens saved');
     setSaving(false);
   };
 
@@ -62,21 +74,25 @@ export default function SettingsPage() {
   };
 
   const tabs = [
-    { id: 'api', label: 'API Keys' },
+    { id: 'api', label: 'API Tokens' },
     { id: 'llm', label: 'AI Agent' },
     { id: 'github', label: 'GitHub Scope' },
   ];
 
-  const toggleShow = (key: string) =>
-    setShowTokens((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggleShow = (key: string) => setShowTokens((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  const providerOptions = LLM_PROVIDERS.map((p) => ({
-    value: p.value,
-    label: p.label,
-  }));
-
+  const providerOptions = LLM_PROVIDERS.map((p) => ({ value: p.value, label: p.label }));
   const currentProvider = LLM_PROVIDERS.find((p) => p.value === settings.llmConfig.provider);
   const modelOptions = (currentProvider?.models || []).map((m) => ({ value: m, label: m }));
+
+  const TokenInput = ({ id, label, value, onChange, placeholder }: { id: string; label: string; value: string; onChange: (v: string) => void; placeholder?: string }) => (
+    <div className="relative">
+      <Input label={label} type={showTokens[id] ? 'text' : 'password'} placeholder={placeholder || `${label}...`} value={value} onChange={(e) => onChange(e.target.value)} />
+      <button onClick={() => toggleShow(id)} className="absolute right-3 top-[38px] text-text-muted hover:text-text-primary transition-colors">
+        {showTokens[id] ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </div>
+  );
 
   return (
     <div className="max-w-2xl space-y-6 animate-fadeIn">
@@ -85,60 +101,39 @@ export default function SettingsPage() {
       {activeTab === 'api' && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Key size={18} className="text-accent" />
-              API Keys
-            </CardTitle>
+            <CardTitle className="flex items-center gap-2"><Key size={18} className="text-accent" /> API Tokens</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative">
-              <Input
-                label="Hugging Face Token"
-                type={showTokens.hf ? 'text' : 'password'}
-                placeholder="hf_..."
-                value={local.hfToken}
-                onChange={(e) => setLocal({ ...local, hfToken: e.target.value })}
-              />
-              <button
-                onClick={() => toggleShow('hf')}
-                className="absolute right-3 top-[38px] text-text-muted hover:text-text-primary"
-              >
-                {showTokens.hf ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
+          <CardContent className="space-y-5">
+            <p className="text-xs text-text-muted">Tokens are encrypted at rest in Supabase. Never shared.</p>
+
+            <TokenInput id="hf" label="Hugging Face" value={local.hfToken} onChange={(v) => setLocal({ ...local, hfToken: v })} placeholder="hf_..." />
+            <TokenInput id="vercel" label="Vercel" value={local.vercelToken} onChange={(v) => setLocal({ ...local, vercelToken: v })} placeholder="vercel_..." />
+            <TokenInput id="github" label="GitHub" value={local.githubToken} onChange={(v) => setLocal({ ...local, githubToken: v })} placeholder="ghp_..." />
+
+            <div className="h-px bg-border-primary" />
+
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <Container size={16} className="text-info" /> Docker Hub
             </div>
-            <div className="relative">
-              <Input
-                label="Vercel Token"
-                type={showTokens.vercel ? 'text' : 'password'}
-                placeholder="vercel_..."
-                value={local.vercelToken}
-                onChange={(e) => setLocal({ ...local, vercelToken: e.target.value })}
-              />
-              <button
-                onClick={() => toggleShow('vercel')}
-                className="absolute right-3 top-[38px] text-text-muted hover:text-text-primary"
-              >
-                {showTokens.vercel ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
+            <TokenInput id="docker" label="Docker Token" value={local.dockerToken} onChange={(v) => setLocal({ ...local, dockerToken: v })} placeholder="dckr_..." />
+
+            <div className="h-px bg-border-primary" />
+
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <GitBranch size={16} className="text-amber" /> GitLab
             </div>
-            <div className="relative">
-              <Input
-                label="GitHub Token"
-                type={showTokens.github ? 'text' : 'password'}
-                placeholder="ghp_..."
-                value={local.githubToken}
-                onChange={(e) => setLocal({ ...local, githubToken: e.target.value })}
-              />
-              <button
-                onClick={() => toggleShow('github')}
-                className="absolute right-3 top-[38px] text-text-muted hover:text-text-primary"
-              >
-                {showTokens.github ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
+            <TokenInput id="gitlab" label="GitLab Token" value={local.gitlabToken} onChange={(v) => setLocal({ ...local, gitlabToken: v })} placeholder="glpat_..." />
+            <Input label="GitLab URL" type="text" placeholder="https://gitlab.com" value={local.gitlabUrl} onChange={(e) => setLocal({ ...local, gitlabUrl: e.target.value })} />
+
+            <div className="h-px bg-border-primary" />
+
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              <Globe size={16} className="text-emerald" /> Netlify
             </div>
-            <Button onClick={saveTokens} loading={saving}>
-              <Save size={14} />
-              Save Tokens
+            <TokenInput id="netlify" label="Netlify Token" value={local.netlifyToken} onChange={(v) => setLocal({ ...local, netlifyToken: v })} placeholder="nfpt_..." />
+
+            <Button onClick={saveAllTokens} loading={saving} className="mt-2">
+              <Save size={14} /> Save All Tokens
             </Button>
           </CardContent>
         </Card>
@@ -147,56 +142,17 @@ export default function SettingsPage() {
       {activeTab === 'llm' && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bot size={18} className="text-accent" />
-              AI Agent Configuration
-            </CardTitle>
+            <CardTitle className="flex items-center gap-2"><Bot size={18} className="text-accent" /> AI Agent Configuration</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Select
-              label="Provider"
-              options={providerOptions}
-              value={settings.llmConfig.provider}
-              onChange={(e) => updateLLMConfig({ provider: e.target.value as LLMConfig['provider'] })}
-            />
-            <div className="relative">
-              <Input
-                label="API Key"
-                type={showTokens.llm ? 'text' : 'password'}
-                placeholder="Enter provider API key..."
-                value={local.llmApiKey}
-                onChange={(e) => setLocal({ ...local, llmApiKey: e.target.value })}
-              />
-              <button
-                onClick={() => toggleShow('llm')}
-                className="absolute right-3 top-[38px] text-text-muted hover:text-text-primary"
-              >
-                {showTokens.llm ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            <Select
-              label="Model"
-              options={modelOptions}
-              value={local.llmModel}
-              onChange={(e) => {
-                setLocal({ ...local, llmModel: e.target.value });
-                updateLLMConfig({ model: e.target.value });
-              }}
-            />
+            <Select label="Provider" options={providerOptions} value={settings.llmConfig.provider} onChange={(e) => updateLLMConfig({ provider: e.target.value as LLMConfig['provider'] })} />
+            <TokenInput id="llm" label="API Key" value={local.llmApiKey} onChange={(v) => setLocal({ ...local, llmApiKey: v })} placeholder="Enter provider API key..." />
+            <Select label="Model" options={modelOptions} value={local.llmModel} onChange={(e) => { setLocal({ ...local, llmModel: e.target.value }); updateLLMConfig({ model: e.target.value }); }} />
             {settings.llmConfig.provider === 'custom' && (
-              <Input
-                label="Base URL"
-                type="text"
-                placeholder="https://your-api.com/v1"
-                value={local.llmBaseUrl}
-                onChange={(e) => setLocal({ ...local, llmBaseUrl: e.target.value })}
-              />
+              <Input label="Base URL" type="text" placeholder="https://your-api.com/v1" value={local.llmBaseUrl} onChange={(e) => setLocal({ ...local, llmBaseUrl: e.target.value })} />
             )}
             <div className="flex gap-2">
-              <Button onClick={saveLLM} loading={saving}>
-                <Save size={14} />
-                Save LLM Config
-              </Button>
+              <Button onClick={saveLLM} loading={saving}><Save size={14} /> Save LLM Config</Button>
             </div>
           </CardContent>
         </Card>
@@ -205,25 +161,12 @@ export default function SettingsPage() {
       {activeTab === 'github' && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield size={18} className="text-accent" />
-              GitHub Scope
-            </CardTitle>
+            <CardTitle className="flex items-center gap-2"><Shield size={18} className="text-accent" /> GitHub Scope</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Select
-              label="Permission Level"
-              options={SCOPE_OPTIONS}
-              value={settings.githubScope}
-              onChange={(e) => { updateGitHubScope(e.target.value as 'read' | 'write' | 'admin'); }}
-            />
-            <Button
-              size="sm"
-              onClick={async () => { setSaving(true); await persistSettings(); addToast('success', 'GitHub scope saved'); setSaving(false); }}
-              loading={saving}
-            >
-              <Save size={14} />
-              Save Scope
+            <Select label="Permission Level" options={SCOPE_OPTIONS} value={settings.githubScope} onChange={(e) => { updateGitHubScope(e.target.value as 'read' | 'write' | 'admin'); }} />
+            <Button size="sm" onClick={async () => { setSaving(true); await persistSettings(); addToast('success', 'GitHub scope saved'); setSaving(false); }} loading={saving}>
+              <Save size={14} /> Save Scope
             </Button>
             <div className="p-3 rounded-lg bg-bg-tertiary border border-border-primary">
               <p className="text-xs text-text-muted">

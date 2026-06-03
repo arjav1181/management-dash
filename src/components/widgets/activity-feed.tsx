@@ -2,21 +2,28 @@
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ActivityItem } from '@/types';
-import { Boxes, Triangle, GitBranch, Bot } from 'lucide-react';
+import { Boxes, Triangle, GitBranch, Bot, Container } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
+import type { Platform } from '@/types';
 
-const platformIcons = {
+const platformIcons: Record<Platform, React.ReactNode> = {
   huggingface: <Boxes size={14} />,
   vercel: <Triangle size={14} />,
   github: <GitBranch size={14} />,
   agent: <Bot size={14} />,
+  docker: <Container size={14} />,
+  gitlab: <GitBranch size={14} />,
+  netlify: <Triangle size={14} />,
 };
 
-const platformColors = {
+const platformColors: Record<Platform, string> = {
   huggingface: 'text-amber',
   vercel: 'text-info',
   github: 'text-text-primary',
   agent: 'text-accent',
+  docker: 'text-info',
+  gitlab: 'text-amber',
+  netlify: 'text-emerald',
 };
 
 interface ActivityFeedProps {

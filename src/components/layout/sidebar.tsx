@@ -6,9 +6,9 @@ import { cn } from '@/lib/utils/cn';
 import { NAV_ITEMS, APP_NAME } from '@/lib/utils/constants';
 import {
   LayoutDashboard, Boxes, Triangle, GitBranch, Terminal, Bot, Settings,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Search, Bell, Container, User, Menu, X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const iconMap: Record<string, React.ReactNode> = {
   LayoutDashboard: <LayoutDashboard size={20} />,
@@ -18,21 +18,25 @@ const iconMap: Record<string, React.ReactNode> = {
   Terminal: <Terminal size={20} />,
   Bot: <Bot size={20} />,
   Settings: <Settings size={20} />,
+  Search: <Search size={20} />,
+  Bell: <Bell size={20} />,
+  Container: <Container size={20} />,
+  User: <User size={20} />,
 };
 
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   if (pathname === '/login') return null;
 
-  return (
-    <aside
-      className={cn(
-        'h-screen sticky top-0 flex flex-col bg-bg-secondary/90 backdrop-blur-sm border-r border-border-primary transition-all duration-300',
-        collapsed ? 'w-16' : 'w-60'
-      )}
-    >
+  const sidebarContent = (
+    <>
       <div className={cn('flex items-center h-16 border-b border-border-primary', collapsed ? 'justify-center px-2' : 'px-4 justify-between')}>
         {!collapsed && (
           <Link href="/" className="flex items-center gap-2.5 group">
@@ -60,7 +64,7 @@ export function Sidebar() {
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="text-text-muted hover:text-text-primary transition-colors p-1 rounded-lg hover:bg-bg-tertiary"
+          className="hidden md:block text-text-muted hover:text-text-primary transition-colors p-1 rounded-lg hover:bg-bg-tertiary"
         >
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
@@ -82,6 +86,7 @@ export function Sidebar() {
                   : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary border border-transparent'
               )}
               title={collapsed ? item.label : undefined}
+              onClick={() => setMobileOpen(false)}
             >
               {iconMap[item.icon] || <LayoutDashboard size={20} />}
               {!collapsed && <span>{item.label}</span>}
@@ -98,6 +103,40 @@ export function Sidebar() {
           </div>
         )}
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile hamburger */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="md:hidden fixed top-4 left-4 z-50 w-10 h-10 rounded-xl bg-bg-secondary border border-border-primary flex items-center justify-center text-text-primary shadow-lg"
+      >
+        <Menu size={20} />
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)}>
+          <div className="fixed left-0 top-0 bottom-0 w-72 bg-bg-secondary border-r border-border-primary overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-end p-3">
+              <button onClick={() => setMobileOpen(false)} className="p-2 rounded-lg hover:bg-bg-tertiary text-text-muted">
+                <X size={20} />
+              </button>
+            </div>
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+
+      {/* Desktop sidebar */}
+      <aside className={cn(
+        'hidden md:flex h-screen sticky top-0 flex-col bg-bg-secondary/90 backdrop-blur-sm border-r border-border-primary transition-all duration-300',
+        collapsed ? 'w-16' : 'w-60'
+      )}>
+        {sidebarContent}
+      </aside>
+    </>
   );
 }

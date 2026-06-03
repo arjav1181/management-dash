@@ -15,7 +15,7 @@ async function fetchApi(token: string, path: string, options?: RequestInit) {
 }
 
 export async function listSpaces(token: string): Promise<HFSpace[]> {
-  const whoami = await fetchApi(token, '/whoami-v2');
+  const whoami = await fetchApi(token, '/whoami');
   const name = whoami?.name as string;
   const orgs = (whoami?.orgs as { name: string }[]) || [];
 
