@@ -6,6 +6,7 @@ import { useSettingsStore } from '@/lib/store/settings';
 import { listRepos } from '@/lib/api/github';
 import { RepoCard } from '@/components/github/repo-card';
 import { Button } from '@/components/ui/button';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { RefreshCw, Search, GitBranch } from 'lucide-react';
 import type { GitHubRepo } from '@/types';
 
@@ -65,11 +66,21 @@ export default function GitHubPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((repo) => (
-          <RepoCard key={repo.id} repo={repo} />
-        ))}
-      </div>
+      {loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      )}
+
+      {!loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((repo) => (
+            <RepoCard key={repo.id} repo={repo} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

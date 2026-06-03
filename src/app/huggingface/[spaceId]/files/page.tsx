@@ -6,6 +6,7 @@ import { useSettingsStore } from '@/lib/store/settings';
 import { listSpaceFiles, readSpaceFile, writeSpaceFile, deleteSpaceFile } from '@/lib/api/huggingface';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { SkeletonFileTree, Skeleton } from '@/components/ui/skeleton';
 import { useToastStore } from '@/components/ui/toast';
 import dynamic from 'next/dynamic';
 import { ArrowLeft, Folder, File, Save, Trash2, RefreshCw } from 'lucide-react';
@@ -147,7 +148,7 @@ export default function SpaceFilesPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <p className="text-sm text-text-muted">Loading...</p>
+              <SkeletonFileTree />
             ) : files.length === 0 ? (
               <p className="text-sm text-text-muted">No files</p>
             ) : (
@@ -176,7 +177,13 @@ export default function SpaceFilesPage() {
             </div>
           </CardHeader>
           <CardContent className="flex-1 min-h-0">
-            {selectedFile ? (
+            {loading ? (
+              <div className="h-[calc(100vh-20rem)] rounded-lg border border-border-primary p-4 space-y-3">
+                {Array.from({ length: 15 }).map((_, i) => (
+                  <Skeleton key={i} className={`h-4 ${i % 2 === 0 ? 'w-3/4' : 'w-1/2'}`} />
+                ))}
+              </div>
+            ) : selectedFile ? (
               <div className="h-[calc(100vh-20rem)] rounded-lg overflow-hidden border border-border-primary">
                 <MonacoEditor
                   value={fileContent}

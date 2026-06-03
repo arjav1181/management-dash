@@ -6,6 +6,7 @@ import { useSettingsStore } from '@/lib/store/settings';
 import { listSpaces } from '@/lib/api/huggingface';
 import { SpaceCard } from '@/components/hf/space-card';
 import { Button } from '@/components/ui/button';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import { RefreshCw, Search, Boxes } from 'lucide-react';
 import type { HFSpace } from '@/types';
 
@@ -71,26 +72,30 @@ export default function HFSpacesPage() {
       )}
 
       {settings.hfToken && loading && (
-        <div className="flex items-center justify-center py-12">
-          <RefreshCw size={24} className="animate-spin text-accent" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
         </div>
       )}
 
-      {settings.hfToken && !loading && spaces.length === 0 && (
+      {settings.hfToken && !loading && filtered.length === 0 && (
         <div className="text-center py-12">
           <p className="text-sm text-text-muted">No spaces found for this account</p>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((space) => (
-          <SpaceCard
-            key={space.id}
-            space={space}
-            onTerminal={handleTerminal}
-          />
-        ))}
-      </div>
+      {!loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((space) => (
+            <SpaceCard
+              key={space.id}
+              space={space}
+              onTerminal={handleTerminal}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

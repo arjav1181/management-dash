@@ -10,6 +10,7 @@ import { PRCard } from '@/components/github/pr-card';
 import { CIStatus } from '@/components/github/ci-status';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { SkeletonTable } from '@/components/ui/skeleton';
 import { Tabs } from '@/components/ui/tabs';
 import { Modal } from '@/components/ui/modal';
 import { Input } from '@/components/ui/input';
@@ -123,7 +124,7 @@ export default function GitHubRepoDetailPage() {
             <CardTitle>Recent Commits</CardTitle>
           </CardHeader>
           <CardContent>
-            <CommitList commits={commits} />
+            {loading ? <SkeletonTable rows={8} /> : <CommitList commits={commits} />}
           </CardContent>
         </Card>
       )}
@@ -134,7 +135,7 @@ export default function GitHubRepoDetailPage() {
             <CardTitle>Issues</CardTitle>
           </CardHeader>
           <CardContent>
-            <IssueList issues={issues} />
+            {loading ? <SkeletonTable rows={8} /> : <IssueList issues={issues} />}
           </CardContent>
         </Card>
       )}
@@ -145,24 +146,26 @@ export default function GitHubRepoDetailPage() {
             <CardTitle>Pull Requests</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1">
-              {prs.map((pr) => (
-                <div key={pr.id} className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <PRCard pr={pr} />
+            {loading ? <SkeletonTable rows={6} /> : (
+              <div className="space-y-1">
+                {prs.map((pr) => (
+                  <div key={pr.id} className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <PRCard pr={pr} />
+                    </div>
+                    {canWrite && pr.state === 'open' && !pr.draft && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleMergePR(pr.number)}
+                      >
+                        <GitMerge size={14} className="text-emerald" />
+                      </Button>
+                    )}
                   </div>
-                  {canWrite && pr.state === 'open' && !pr.draft && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleMergePR(pr.number)}
-                    >
-                      <GitMerge size={14} className="text-emerald" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -173,7 +176,7 @@ export default function GitHubRepoDetailPage() {
             <CardTitle>CI/CD Status</CardTitle>
           </CardHeader>
           <CardContent>
-            <CIStatus runs={actions} />
+            {loading ? <SkeletonTable rows={6} /> : <CIStatus runs={actions} />}
           </CardContent>
         </Card>
       )}

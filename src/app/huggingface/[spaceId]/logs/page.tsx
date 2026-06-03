@@ -6,6 +6,7 @@ import { useSettingsStore } from '@/lib/store/settings';
 import { getSpaceLogs } from '@/lib/api/huggingface';
 import { LogViewer } from '@/components/hf/log-viewer';
 import { Button } from '@/components/ui/button';
+import { SkeletonLogViewer } from '@/components/ui/skeleton';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { HFSpaceLog } from '@/types';
@@ -52,7 +53,7 @@ export default function SpaceLogsPage() {
           <RefreshCw size={14} />
         </Button>
       </div>
-      <LogViewer logs={logs} loading={loading} />
+      {loading ? <SkeletonLogViewer /> : <LogViewer logs={logs} loading={false} />}
     </div>
   );
 }

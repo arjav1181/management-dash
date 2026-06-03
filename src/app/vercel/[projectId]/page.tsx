@@ -8,6 +8,7 @@ import { DeploymentRow } from '@/components/vercel/deployment-row';
 import { DeploymentLogs } from '@/components/vercel/deployment-logs';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { SkeletonTable, SkeletonLogViewer } from '@/components/ui/skeleton';
 import { Tabs } from '@/components/ui/tabs';
 import { useToastStore } from '@/components/ui/toast';
 import { ArrowLeft, RefreshCw, Rocket, Triangle } from 'lucide-react';
@@ -94,7 +95,7 @@ export default function VercelProjectDetailPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <p className="text-sm text-text-muted">Loading...</p>
+              <SkeletonTable rows={8} />
             ) : deployments.length === 0 ? (
               <p className="text-sm text-text-muted">No deployments yet</p>
             ) : (
@@ -123,7 +124,7 @@ export default function VercelProjectDetailPage() {
           </CardHeader>
           <CardContent>
             {selectedDeploy ? (
-              <DeploymentLogs logs={logs} />
+              loading ? <SkeletonLogViewer /> : <DeploymentLogs logs={logs} />
             ) : (
               <p className="text-sm text-text-muted">Click a deployment to view its logs</p>
             )}

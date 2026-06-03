@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Boxes, Triangle, GitBranch, Bot, RefreshCw, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SkeletonStatCard, SkeletonTable, SkeletonCard } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import type { HFSpace, VercelProject, GitHubRepo, ActivityItem } from '@/types';
 import { listSpaces } from '@/lib/api/huggingface';
@@ -104,31 +105,42 @@ export default function Home() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="HF Spaces"
-          value={spaces.length}
-          subtitle={`${runningSpaces} running`}
-          icon={<Boxes size={28} />}
-          trend={spaces.length > 0 ? { value: Math.round((runningSpaces / spaces.length) * 100), positive: true } : undefined}
-        />
-        <StatCard
-          title="Vercel Projects"
-          value={projects.length}
-          subtitle={`${readyProjects} deployed`}
-          icon={<Triangle size={28} />}
-        />
-        <StatCard
-          title="GitHub Repos"
-          value={repos.length}
-          subtitle={`${repos.reduce((s, r) => s + r.stars, 0)} total stars`}
-          icon={<GitBranch size={28} />}
-        />
-        <StatCard
-          title="Total Issues"
-          value={repos.reduce((sum, r) => sum + r.openIssues, 0)}
-          subtitle="Across all repos"
-          icon={<Bot size={28} />}
-        />
+        {loading ? (
+          <>
+            <SkeletonStatCard />
+            <SkeletonStatCard />
+            <SkeletonStatCard />
+            <SkeletonStatCard />
+          </>
+        ) : (
+          <>
+            <StatCard
+              title="HF Spaces"
+              value={spaces.length}
+              subtitle={`${runningSpaces} running`}
+              icon={<Boxes size={28} />}
+              trend={spaces.length > 0 ? { value: Math.round((runningSpaces / spaces.length) * 100), positive: true } : undefined}
+            />
+            <StatCard
+              title="Vercel Projects"
+              value={projects.length}
+              subtitle={`${readyProjects} deployed`}
+              icon={<Triangle size={28} />}
+            />
+            <StatCard
+              title="GitHub Repos"
+              value={repos.length}
+              subtitle={`${repos.reduce((s, r) => s + r.stars, 0)} total stars`}
+              icon={<GitBranch size={28} />}
+            />
+            <StatCard
+              title="Total Issues"
+              value={repos.reduce((sum, r) => sum + r.openIssues, 0)}
+              subtitle="Across all repos"
+              icon={<Bot size={28} />}
+            />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -146,23 +158,27 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {spaces.slice(0, 5).map((space) => (
-                <div key={space.id} className="flex items-center justify-between py-2 border-b border-border-primary last:border-0">
-                  <span className="text-sm text-text-primary truncate">{space.name}</span>
-                  <Badge
-                    variant={
-                      space.status === 'running' ? 'success' :
-                      space.status === 'sleeping' ? 'info' :
-                      space.status === 'building' ? 'warning' :
-                      space.status === 'error' ? 'danger' : 'neutral'
-                    }
-                    dot
-                  >
-                    {space.status}
-                  </Badge>
-                </div>
-              ))}
-              {spaces.length === 0 && (
+              {loading ? (
+                <SkeletonTable rows={4} />
+              ) : (
+                spaces.slice(0, 5).map((space) => (
+                  <div key={space.id} className="flex items-center justify-between py-2 border-b border-border-primary last:border-0">
+                    <span className="text-sm text-text-primary truncate">{space.name}</span>
+                    <Badge
+                      variant={
+                        space.status === 'running' ? 'success' :
+                        space.status === 'sleeping' ? 'info' :
+                        space.status === 'building' ? 'warning' :
+                        space.status === 'error' ? 'danger' : 'neutral'
+                      }
+                      dot
+                    >
+                      {space.status}
+                    </Badge>
+                  </div>
+                ))
+              )}
+              {!loading && spaces.length === 0 && (
                 <p className="text-sm text-text-muted text-center py-4">
                   {settings.hfToken ? 'No spaces found' : 'Add HF token in Settings'}
                 </p>
@@ -185,27 +201,31 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {projects.slice(0, 5).map((project) => {
-                const deploy = project.latestDeployments?.[0];
-                return (
-                  <div key={project.id} className="flex items-center justify-between py-2 border-b border-border-primary last:border-0">
-                    <span className="text-sm text-text-primary truncate">{project.name}</span>
-                    {deploy && (
-                      <Badge
-                        variant={
-                          deploy.state === 'READY' ? 'success' :
-                          deploy.state === 'BUILDING' ? 'warning' :
-                          deploy.state === 'ERROR' ? 'danger' : 'neutral'
-                        }
-                        dot
-                      >
-                        {deploy.state}
-                      </Badge>
-                    )}
-                  </div>
-                );
-              })}
-              {projects.length === 0 && (
+              {loading ? (
+                <SkeletonTable rows={4} />
+              ) : (
+                projects.slice(0, 5).map((project) => {
+                  const deploy = project.latestDeployments?.[0];
+                  return (
+                    <div key={project.id} className="flex items-center justify-between py-2 border-b border-border-primary last:border-0">
+                      <span className="text-sm text-text-primary truncate">{project.name}</span>
+                      {deploy && (
+                        <Badge
+                          variant={
+                            deploy.state === 'READY' ? 'success' :
+                            deploy.state === 'BUILDING' ? 'warning' :
+                            deploy.state === 'ERROR' ? 'danger' : 'neutral'
+                          }
+                          dot
+                        >
+                          {deploy.state}
+                        </Badge>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+              {!loading && projects.length === 0 && (
                 <p className="text-sm text-text-muted text-center py-4">
                   {settings.vercelToken ? 'No projects found' : 'Add Vercel token in Settings'}
                 </p>
@@ -230,13 +250,17 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {repos.slice(0, 5).map((repo) => (
-                <div key={repo.id} className="flex items-center justify-between py-2 border-b border-border-primary last:border-0">
-                  <span className="text-sm text-text-primary truncate">{repo.name}</span>
-                  <span className="text-xs text-text-muted">{repo.language || 'N/A'}</span>
-                </div>
-              ))}
-              {repos.length === 0 && (
+              {loading ? (
+                <SkeletonTable rows={4} />
+              ) : (
+                repos.slice(0, 5).map((repo) => (
+                  <div key={repo.id} className="flex items-center justify-between py-2 border-b border-border-primary last:border-0">
+                    <span className="text-sm text-text-primary truncate">{repo.name}</span>
+                    <span className="text-xs text-text-muted">{repo.language || 'N/A'}</span>
+                  </div>
+                ))
+              )}
+              {!loading && repos.length === 0 && (
                 <p className="text-sm text-text-muted text-center py-4">
                   {settings.githubToken ? 'No repos found' : 'Add GitHub token in Settings'}
                 </p>
