@@ -17,7 +17,7 @@ const pageTitles: Record<string, string> = {
 
 export function Header() {
   const pathname = usePathname();
-  const { auth, logout } = useSettingsStore();
+  const { user, logout } = useSettingsStore();
 
   if (pathname === '/login') return null;
 
@@ -30,11 +30,11 @@ export function Header() {
         <p className="text-xs text-text-muted">{pathname}</p>
       </div>
       <div className="flex items-center gap-3">
-        {auth.isLoggedIn && (
+        {user && (
           <>
             <div className="flex items-center gap-2 text-sm text-text-secondary">
               <User size={16} className="text-text-muted" />
-              <span>{auth.email}</span>
+              <span>{user.email}</span>
             </div>
             <Button variant="ghost" size="sm" onClick={logout}>
               <LogOut size={16} />

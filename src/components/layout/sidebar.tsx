@@ -3,13 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils/cn';
-import { NAV_ITEMS } from '@/lib/utils/constants';
+import { NAV_ITEMS, APP_NAME } from '@/lib/utils/constants';
 import {
   LayoutDashboard, Boxes, Triangle, GitBranch, Terminal, Bot, Settings,
   ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { useState } from 'react';
-import { APP_NAME } from '@/lib/utils/constants';
 
 const iconMap: Record<string, React.ReactNode> = {
   LayoutDashboard: <LayoutDashboard size={20} />,
@@ -30,16 +29,34 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'h-screen sticky top-0 flex flex-col bg-bg-secondary border-r border-border-primary transition-all duration-300',
+        'h-screen sticky top-0 flex flex-col bg-bg-secondary/90 backdrop-blur-sm border-r border-border-primary transition-all duration-300',
         collapsed ? 'w-16' : 'w-60'
       )}
     >
-      <div className={cn('flex items-center px-4 h-16 border-b border-border-primary', collapsed ? 'justify-center' : 'justify-between')}>
+      <div className={cn('flex items-center h-16 border-b border-border-primary', collapsed ? 'justify-center px-2' : 'px-4 justify-between')}>
         {!collapsed && (
-          <div>
-            <h1 className="text-base font-bold text-accent tracking-tight">{APP_NAME}</h1>
-            <p className="text-[10px] text-text-muted leading-tight">infra control center</p>
-          </div>
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-accent-hover flex items-center justify-center shadow-sm shadow-accent/30 group-hover:shadow-md group-hover:shadow-accent/40 transition-shadow">
+              <svg width="18" height="18" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 22L10 14L14 18L18 10L22 16L26 8" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="26" cy="8" r="2" fill="white"/>
+                <circle cx="6" cy="22" r="2" fill="white"/>
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-text-primary tracking-tight">{APP_NAME}</h1>
+              <p className="text-[9px] text-text-muted leading-tight">infra control center</p>
+            </div>
+          </Link>
+        )}
+        {collapsed && (
+          <Link href="/" className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-accent-hover flex items-center justify-center shadow-sm shadow-accent/30">
+            <svg width="18" height="18" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6 22L10 14L14 18L18 10L22 16L26 8" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="26" cy="8" r="2" fill="white"/>
+              <circle cx="6" cy="22" r="2" fill="white"/>
+            </svg>
+          </Link>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -61,8 +78,8 @@ export function Sidebar() {
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                 collapsed && 'justify-center px-2',
                 isActive
-                  ? 'bg-accent/10 text-accent'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+                  ? 'bg-accent/10 text-accent border border-accent/20'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary border border-transparent'
               )}
               title={collapsed ? item.label : undefined}
             >

@@ -1,4 +1,4 @@
-export const APP_NAME = 'Management Dash';
+export const APP_NAME = 'Bridge';
 export const APP_TAGLINE = 'Unified infrastructure control center';
 
 export const NAV_ITEMS = [

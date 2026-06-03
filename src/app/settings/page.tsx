@@ -18,10 +18,11 @@ const SCOPE_OPTIONS = [
 ];
 
 export default function SettingsPage() {
-  const { settings, updateToken, updateGitHubScope, updateLLMConfig } = useSettingsStore();
+  const { settings, updateToken, updateGitHubScope, updateLLMConfig, persistSettings } = useSettingsStore();
   const { addToast } = useToastStore();
   const [activeTab, setActiveTab] = useState('api');
   const [showTokens, setShowTokens] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
   const [local, setLocal] = useState({
     hfToken: '',
     vercelToken: '',
@@ -42,16 +43,22 @@ export default function SettingsPage() {
     });
   }, [settings]);
 
-  const saveTokens = () => {
+  const saveTokens = async () => {
+    setSaving(true);
     updateToken('hf', local.hfToken);
     updateToken('vercel', local.vercelToken);
     updateToken('github', local.githubToken);
+    await persistSettings();
     addToast('success', 'API keys saved');
+    setSaving(false);
   };
 
-  const saveLLM = () => {
+  const saveLLM = async () => {
+    setSaving(true);
     updateLLMConfig({ apiKey: local.llmApiKey, model: local.llmModel, baseUrl: local.llmBaseUrl || undefined });
+    await persistSettings();
     addToast('success', 'LLM config saved');
+    setSaving(false);
   };
 
   const tabs = [
@@ -129,7 +136,7 @@ export default function SettingsPage() {
                 {showTokens.github ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            <Button onClick={saveTokens}>
+            <Button onClick={saveTokens} loading={saving}>
               <Save size={14} />
               Save Tokens
             </Button>
@@ -186,7 +193,7 @@ export default function SettingsPage() {
               />
             )}
             <div className="flex gap-2">
-              <Button onClick={saveLLM}>
+              <Button onClick={saveLLM} loading={saving}>
                 <Save size={14} />
                 Save LLM Config
               </Button>
@@ -208,8 +215,16 @@ export default function SettingsPage() {
               label="Permission Level"
               options={SCOPE_OPTIONS}
               value={settings.githubScope}
-              onChange={(e) => updateGitHubScope(e.target.value as 'read' | 'write' | 'admin')}
+              onChange={(e) => { updateGitHubScope(e.target.value as 'read' | 'write' | 'admin'); }}
             />
+            <Button
+              size="sm"
+              onClick={async () => { setSaving(true); await persistSettings(); addToast('success', 'GitHub scope saved'); setSaving(false); }}
+              loading={saving}
+            >
+              <Save size={14} />
+              Save Scope
+            </Button>
             <div className="p-3 rounded-lg bg-bg-tertiary border border-border-primary">
               <p className="text-xs text-text-muted">
                 {settings.githubScope === 'read' && 'Can view repos, commits, issues, PRs, and CI status.'}

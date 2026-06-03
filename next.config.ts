@@ -4,7 +4,8 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
-  serverExternalPackages: ['bcryptjs'],
+  allowedDevOrigins: ['2e749a99-3351-427e-a35c-cda034db4ef3-00-tjpcufa55p9i.sisko.replit.dev'],
+  serverExternalPackages: [],
   async headers() {
     return [
       {

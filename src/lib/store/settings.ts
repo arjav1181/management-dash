@@ -1,98 +1,122 @@
 'use client';
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { UserSettings, AuthUser, GitHubScope, LLMConfig } from '@/types';
+import { createClient } from '@/lib/supabase/client';
+import { fetchSettings, saveSettings } from '@/lib/supabase/db';
+import type { LLMConfig, GitHubScope } from '@/types';
+
+interface FlatSettings {
+  hfToken: string;
+  vercelToken: string;
+  githubToken: string;
+  githubScope: GitHubScope;
+  llmConfig: LLMConfig;
+}
 
 interface SettingsState {
-  settings: UserSettings;
-  auth: AuthUser;
+  hydrated: boolean;
+  user: { id: string; email: string } | null;
+  settings: FlatSettings;
+  loading: boolean;
+  init: () => Promise<void>;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (email: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   updateToken: (service: 'hf' | 'vercel' | 'github', token: string) => void;
   updateGitHubScope: (scope: GitHubScope) => void;
   updateLLMConfig: (config: Partial<LLMConfig>) => void;
-  login: (email: string, password: string) => boolean;
-  register: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  persistSettings: () => Promise<void>;
 }
 
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return 'h_' + Math.abs(hash).toString(36) + '_' + str.length;
-}
-
-const DEFAULT_SETTINGS: UserSettings = {
+const DEFAULT_SETTINGS: FlatSettings = {
   hfToken: '',
   vercelToken: '',
   githubToken: '',
   githubScope: 'read',
   llmConfig: { provider: 'groq', apiKey: '', model: 'llama-3.1-8b-instant' },
-  email: '',
-  passwordHash: '',
 };
 
-export const useSettingsStore = create<SettingsState>()(
-  persist(
-    (set, get) => ({
-      settings: DEFAULT_SETTINGS,
-      auth: { email: '', isLoggedIn: false },
+export const useSettingsStore = create<SettingsState>()((set, get) => ({
+  hydrated: false,
+  user: null,
+  settings: DEFAULT_SETTINGS,
+  loading: false,
 
-      updateToken: (service, token) =>
-        set((state) => ({
-          settings: {
-            ...state.settings,
-            ...(service === 'hf' && { hfToken: token }),
-            ...(service === 'vercel' && { vercelToken: token }),
-            ...(service === 'github' && { githubToken: token }),
-          },
-        })),
+  init: async () => {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
 
-      updateGitHubScope: (scope) =>
-        set((state) => ({
-          settings: { ...state.settings, githubScope: scope },
-        })),
-
-      updateLLMConfig: (config) =>
-        set((state) => ({
-          settings: {
-            ...state.settings,
-            llmConfig: { ...state.settings.llmConfig, ...config },
-          },
-        })),
-
-      login: (email, password) => {
-        const state = get();
-        const hash = simpleHash(password + email);
-        if (state.settings.email === email && state.settings.passwordHash === hash) {
-          set({ auth: { email, isLoggedIn: true } });
-          return true;
-        }
-        return false;
-      },
-
-      register: async (email, password) => {
-        const state = get();
-        if (state.settings.email) return false;
-        const hash = simpleHash(password + email);
-        set({
-          settings: { ...state.settings, email, passwordHash: hash },
-          auth: { email, isLoggedIn: true },
-        });
-        return true;
-      },
-
-      logout: () => set({ auth: { email: '', isLoggedIn: false } }),
-    }),
-    {
-      name: 'mgmt-dash-settings',
-      partialize: (state) => ({
-        settings: state.settings,
-        auth: state.auth,
-      }),
+    if (!session?.user) {
+      set({ hydrated: true, user: null });
+      return;
     }
-  )
-);
+
+    const user = { id: session.user.id, email: session.user.email || '' };
+    const { settings } = await fetchSettings(supabase);
+    set({ hydrated: true, user, settings });
+  },
+
+  login: async (email, password) => {
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return false;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return false;
+
+    const user = { id: session.user.id, email: session.user.email || '' };
+    const { settings } = await fetchSettings(supabase);
+    set({ user, settings, hydrated: true });
+    return true;
+  },
+
+  register: async (email, password) => {
+    const supabase = createClient();
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) return false;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return false;
+
+    const user = { id: session.user.id, email: session.user.email || '' };
+    await fetchSettings(supabase);
+    set({ user, settings: DEFAULT_SETTINGS, hydrated: true });
+    return true;
+  },
+
+  logout: async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    set({ user: null, settings: DEFAULT_SETTINGS });
+  },
+
+  updateToken: (service, token) =>
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        ...(service === 'hf' && { hfToken: token }),
+        ...(service === 'vercel' && { vercelToken: token }),
+        ...(service === 'github' && { githubToken: token }),
+      },
+    })),
+
+  updateGitHubScope: (scope) =>
+    set((state) => ({
+      settings: { ...state.settings, githubScope: scope },
+    })),
+
+  updateLLMConfig: (config) =>
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        llmConfig: { ...state.settings.llmConfig, ...config },
+      },
+    })),
+
+  persistSettings: async () => {
+    const { user, settings } = get();
+    if (!user) return;
+    const supabase = createClient();
+    await saveSettings(supabase, settings);
+  },
+}));
