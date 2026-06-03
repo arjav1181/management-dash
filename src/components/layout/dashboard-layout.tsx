@@ -9,25 +9,17 @@ import { useEffect } from 'react';
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { auth, _hydrated } = useSettingsStore();
+  const { auth } = useSettingsStore();
+  const isLoginPage = pathname === '/login';
 
   useEffect(() => {
-    if (_hydrated && !auth.isLoggedIn && pathname !== '/login') {
-      router.push('/login');
+    if (!isLoginPage && !auth.isLoggedIn) {
+      router.replace('/login');
     }
-  }, [_hydrated, auth.isLoggedIn, pathname, router]);
+  }, [isLoginPage, auth.isLoggedIn, router]);
 
-  if (pathname === '/login') {
-    return <>{children}</>;
-  }
-
-  if (!_hydrated) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-bg-primary">
-        <div className="animate-spin h-8 w-8 border-2 border-accent border-t-transparent rounded-full" />
-      </div>
-    );
-  }
+  if (isLoginPage) return <>{children}</>;
+  if (!auth.isLoggedIn) return <div className="h-screen bg-bg-primary" />;
 
   return (
     <div className="flex h-screen overflow-hidden">

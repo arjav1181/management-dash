@@ -7,7 +7,6 @@ import type { UserSettings, AuthUser, GitHubScope, LLMConfig } from '@/types';
 interface SettingsState {
   settings: UserSettings;
   auth: AuthUser;
-  _hydrated: boolean;
   updateToken: (service: 'hf' | 'vercel' | 'github', token: string) => void;
   updateGitHubScope: (scope: GitHubScope) => void;
   updateLLMConfig: (config: Partial<LLMConfig>) => void;
@@ -41,7 +40,6 @@ export const useSettingsStore = create<SettingsState>()(
     (set, get) => ({
       settings: DEFAULT_SETTINGS,
       auth: { email: '', isLoggedIn: false },
-      _hydrated: false,
 
       updateToken: (service, token) =>
         set((state) => ({
@@ -94,11 +92,6 @@ export const useSettingsStore = create<SettingsState>()(
       partialize: (state) => ({
         settings: state.settings,
         auth: state.auth,
-      }),
-      merge: (persisted, current) => ({
-        ...current,
-        ...(persisted as Partial<SettingsState>),
-        _hydrated: true,
       }),
     }
   )
